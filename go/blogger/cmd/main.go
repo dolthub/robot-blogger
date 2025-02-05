@@ -12,7 +12,6 @@ import (
 
 var model = flag.String("model", "llama3", "the model to use for generating the blog")
 var createEmbeddings = flag.Bool("create-embeddings", false, "creates embeddings with the model and writes them to the database")
-var prompt = flag.String("prompt", "", "the prompt to use for generating the blog")
 
 func main() {
 	flag.Parse()
@@ -51,19 +50,15 @@ func main() {
 
 		// if the provided inputs are older than the last vectorized input, then do nothing
 		// think we just need to figure out the right key for inputs
-	} else if *prompt != "" {
+	}
 
-		rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
-		_, err := rawBlogger.WriteBlog(ctx, *prompt, os.Stdout)
-		if err != nil {
-			fmt.Println("error writing blog", err)
-			os.Exit(1)
-		}
-
-	} else {
-		usage()
+	rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
+	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, os.Stdout)
+	if err != nil {
+		fmt.Println("error writing blog", err)
 		os.Exit(1)
 	}
+
 }
 
 func usage() {
