@@ -24,7 +24,7 @@ func insert(docfile string) error {
 		return err
 	}
 	req := &api.EmbeddingRequest{
-		Model:  "llama3",
+		Model:  "llama3.2",
 		Prompt: doc,
 	}
 	resp, err := cli.Embeddings(context.Background(), req)
@@ -55,7 +55,7 @@ func query(prompt string) (string, error) {
 		return "", err
 	}
 	req := &api.EmbeddingRequest{
-		Model:  "llama3",
+		Model:  "llama3.2",
 		Prompt: prompt,
 	}
 	resp, err := cli.Embeddings(context.Background(), req)
@@ -86,7 +86,7 @@ func query(prompt string) (string, error) {
 
 	stream := false
 	req2 := &api.ChatRequest{
-		Model:  "llama3",
+		Model:  "llama3.2",
 		Stream: &stream,
 		Messages: []api.Message{
 			{

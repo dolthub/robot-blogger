@@ -11,3 +11,4 @@ Steps:
 2. install postrgres and pgvector (if installing via homebrew, need postgresql@17), https://github.com/pgvector/pgvector
 3. create a new database called `robot_blogger`
 3. run create extension vector in postgres
+4. create table for documents and embeddings `create table items (id serial primary key, doc text, embedding vector(4096));`
