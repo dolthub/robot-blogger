@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
+	"github.com/jackc/pgx/v5"
 )
 
 type postgresLocallyRunningServer struct {
@@ -36,8 +37,8 @@ func (s *postgresLocallyRunningServer) GetConnectionString() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s", s.user, s.password, s.host, s.port, s.databaseName)
 }
 
-func (s *postgresLocallyRunningServer) newDB() (*sql.DB, error) {
-	return sql.Open("postgres", s.GetConnectionString())
+func (s *postgresLocallyRunningServer) newConn(ctx context.Context) (*pgx.Conn, error) {
+	return pgx.Connect(ctx, s.GetConnectionString())
 }
 
 func (s *postgresLocallyRunningServer) Start(ctx context.Context) error {
@@ -47,5 +48,15 @@ func (s *postgresLocallyRunningServer) Start(ctx context.Context) error {
 }
 
 func (s *postgresLocallyRunningServer) Stop(ctx context.Context) error {
+	return nil
+}
+
+func (s *postgresLocallyRunningServer) Embed(ctx context.Context, input []float32) error {
+	conn, err := s.newConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(ctx)
+
 	return nil
 }

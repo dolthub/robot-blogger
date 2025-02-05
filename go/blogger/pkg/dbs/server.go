@@ -5,7 +5,8 @@ import (
 )
 
 type DatabaseServer interface {
+	Embedder
+
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
-	GetConnectionString() string
 }

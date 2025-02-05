@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
+	"github.com/ollama/ollama/api"
 )
 
 // this is a server that is locally running ollama
@@ -11,18 +12,21 @@ import (
 // and the model is expected to be locally available and running
 type ollamaLocallyRunningServer struct {
 	model string
-	port  int
-	host  string
+	cli   *api.Client
 }
 
 var _ models.ModelServer = &ollamaLocallyRunningServer{}
 
-func NewOllamaLocallyRunningServer(model string, port int) *ollamaLocallyRunningServer {
+func NewOllamaLocallyRunningServer(model string) (*ollamaLocallyRunningServer, error) {
+	cli, err := api.ClientFromEnvironment()
+	if err != nil {
+		return nil, err
+	}
+
 	return &ollamaLocallyRunningServer{
 		model: model,
-		port:  port,
-		host:  "127.0.0.1",
-	}
+		cli:   cli,
+	}, nil
 }
 
 func (s *ollamaLocallyRunningServer) Start(ctx context.Context) error {
@@ -34,4 +38,28 @@ func (s *ollamaLocallyRunningServer) Start(ctx context.Context) error {
 
 func (s *ollamaLocallyRunningServer) Stop(ctx context.Context) error {
 	return nil
+}
+
+func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string) (string, error) {
+	return "", nil
+}
+
+func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, prompt string) ([]float32, error) {
+	doc := ""
+
+	req := &api.EmbeddingRequest{
+		Model:  s.model,
+		Prompt: doc,
+	}
+	resp, err := s.cli.Embeddings(context.Background(), req)
+	if err != nil {
+		return nil, err
+	}
+
+	e := make([]float32, len(resp.Embedding))
+	for i, f := range resp.Embedding {
+		e[i] = float32(f)
+	}
+
+	return e, nil
 }

@@ -5,5 +5,6 @@ import (
 )
 
 type Input interface {
+	ID() string
 	io.Reader
 }
