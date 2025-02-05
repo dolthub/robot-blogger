@@ -52,6 +52,9 @@ func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.Dat
 		return err
 	}
 
+	// todo: for now, only do single input
+	inputs = inputs[:1]
+
 	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, db)
 	if err != nil {
 		return err
