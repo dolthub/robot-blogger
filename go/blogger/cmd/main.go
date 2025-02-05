@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger/llama3"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models/ollama"
 )
 
 var model = flag.String("model", "llama3", "the model to use for generating the blog")
-var createEmbeddings = flag.Bool("create-embeddings", false, "creates embeddings with the model and writes them to the database")
+var inputsDir = flag.String("inputs", "", "the inputs directory")
 
 func main() {
 	flag.Parse()
@@ -24,20 +25,17 @@ func main() {
 
 	ctx := context.Background()
 
-	modelServer, err := ollama.NewOllamaLocallyRunningServer(*model)
-	if err != nil {
-		fmt.Println("error starting model server", err)
-		os.Exit(1)
-	}
+	if *inputsDir != "" {
+		inputs, err := blogger.NewMarkdownBlogPostInputsFromDir(*inputsDir)
+		if err != nil {
+			fmt.Println("error reading inputs", err)
+			os.Exit(1)
+		}
 
-	err = modelServer.Start(ctx)
-	if err != nil {
-		fmt.Println("error starting model server", err)
-		os.Exit(1)
-	}
-	defer modelServer.Stop(ctx)
+		for _, input := range inputs {
+			fmt.Println("input", input.ID())
+		}
 
-	if *createEmbeddings {
 		// start database server
 		// defer stop database server
 
@@ -50,15 +48,27 @@ func main() {
 
 		// if the provided inputs are older than the last vectorized input, then do nothing
 		// think we just need to figure out the right key for inputs
-	}
 
-	rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
-	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, os.Stdout)
-	if err != nil {
-		fmt.Println("error writing blog", err)
-		os.Exit(1)
-	}
+	} else {
+		modelServer, err := ollama.NewOllamaLocallyRunningServer(*model)
+		if err != nil {
+			fmt.Println("error starting model server", err)
+			os.Exit(1)
+		}
 
+		err = modelServer.Start(ctx)
+		if err != nil {
+			fmt.Println("error starting model server", err)
+			os.Exit(1)
+		}
+		defer modelServer.Stop(ctx)
+		rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
+		_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, os.Stdout)
+		if err != nil {
+			fmt.Println("error writing blog", err)
+			os.Exit(1)
+		}
+	}
 }
 
 func usage() {

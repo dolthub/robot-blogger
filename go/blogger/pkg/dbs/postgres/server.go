@@ -44,6 +44,8 @@ func (s *postgresLocallyRunningServer) newConn(ctx context.Context) (*pgx.Conn, 
 func (s *postgresLocallyRunningServer) Start(ctx context.Context) error {
 	// todo: ping server to ensure it is running
 	// todo: check pgvector extension is installed
+	// todo: create embeddings table if not exists
+	// todo: create metadata table if not exists
 	return nil
 }
 
@@ -58,5 +60,6 @@ func (s *postgresLocallyRunningServer) Embed(ctx context.Context, input []float3
 	}
 	defer conn.Close(ctx)
 
+	// todo: insert ignore embeddings into embeddings table
 	return nil
 }
