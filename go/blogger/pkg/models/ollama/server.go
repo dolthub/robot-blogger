@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
 	"github.com/ollama/ollama/api"
 )
@@ -18,11 +19,12 @@ type ollamaLocallyRunningServer struct {
 	model string
 	cli   *api.Client
 	mr    *api.ProcessModelResponse
+	db    dbs.DatabaseServer
 }
 
 var _ models.ModelServer = &ollamaLocallyRunningServer{}
 
-func NewOllamaLocallyRunningServer(model string) (*ollamaLocallyRunningServer, error) {
+func NewOllamaLocallyRunningServer(model string, db dbs.DatabaseServer) (*ollamaLocallyRunningServer, error) {
 	if os.Getenv("OLLAMA_HOST") == "" {
 		return nil, fmt.Errorf("OLLAMA_HOST is not set")
 	}
@@ -35,6 +37,7 @@ func NewOllamaLocallyRunningServer(model string) (*ollamaLocallyRunningServer, e
 	return &ollamaLocallyRunningServer{
 		model: model,
 		cli:   cli,
+		db:    db,
 	}, nil
 }
 
@@ -101,7 +104,7 @@ func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string, wc
 	return m, nil
 }
 
-func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, prompt string) ([]float32, error) {
+func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, prompt string) error {
 	doc := ""
 
 	req := &api.EmbeddingRequest{
@@ -110,7 +113,7 @@ func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, pro
 	}
 	resp, err := s.cli.Embeddings(context.Background(), req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	e := make([]float32, len(resp.Embedding))
@@ -118,5 +121,5 @@ func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, pro
 		e[i] = float32(f)
 	}
 
-	return e, nil
+	return s.db.Embed(ctx, e)
 }

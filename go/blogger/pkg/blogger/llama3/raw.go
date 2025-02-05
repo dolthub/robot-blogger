@@ -12,16 +12,12 @@ type llama3OnlyBlogger struct {
 	ms models.ModelServer
 }
 
-var _ blogger.Blogger = &llama3OnlyBlogger{}
+var _ blogger.BlogWriter = &llama3OnlyBlogger{}
 
 func NewLlama3OnlyBlogger(ms models.ModelServer) *llama3OnlyBlogger {
 	return &llama3OnlyBlogger{
 		ms: ms,
 	}
-}
-
-func (b *llama3OnlyBlogger) UpdateInput(ctx context.Context, input blogger.Input) error {
-	return nil
 }
 
 func (b *llama3OnlyBlogger) WriteBlog(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {

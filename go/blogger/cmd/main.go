@@ -4,15 +4,18 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger/llama3"
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models/ollama"
 )
 
 var model = flag.String("model", "llama3", "the model to use for generating the blog")
 var inputsDir = flag.String("inputs", "", "the inputs directory")
+var postgres = flag.Bool("postgres", false, "use postgres for the database")
 
 func main() {
 	flag.Parse()
@@ -25,50 +28,64 @@ func main() {
 
 	ctx := context.Background()
 
+	// db is noop for now
+	db := dbs.NewNoopDatabaseServer()
+
 	if *inputsDir != "" {
-		inputs, err := blogger.NewMarkdownBlogPostInputsFromDir(*inputsDir)
+		err := embedInputs(ctx, *inputsDir, *model, db)
 		if err != nil {
-			fmt.Println("error reading inputs", err)
+			fmt.Println("error embedding inputs", err)
 			os.Exit(1)
 		}
-
-		for _, input := range inputs {
-			fmt.Println("input", input.ID())
-		}
-
-		// start database server
-		// defer stop database server
-
-		// read from database the last vectorized input
-		// search the provide inputs
-
-		// if the provided inputs are newer than the last vectorized input, then vectorize the inputs
-		// and save the vectorized inputs to the database
-		// update the last vectorized input in the database
-
-		// if the provided inputs are older than the last vectorized input, then do nothing
-		// think we just need to figure out the right key for inputs
-
 	} else {
-		modelServer, err := ollama.NewOllamaLocallyRunningServer(*model)
-		if err != nil {
-			fmt.Println("error starting model server", err)
-			os.Exit(1)
-		}
-
-		err = modelServer.Start(ctx)
-		if err != nil {
-			fmt.Println("error starting model server", err)
-			os.Exit(1)
-		}
-		defer modelServer.Stop(ctx)
-		rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
-		_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, os.Stdout)
+		err := writeBlog(ctx, *model, db, os.Stdout)
 		if err != nil {
 			fmt.Println("error writing blog", err)
 			os.Exit(1)
 		}
 	}
+}
+
+func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.DatabaseServer) error {
+	inputs, err := blogger.NewMarkdownBlogPostInputsFromDir(inputsDir)
+	if err != nil {
+		return err
+	}
+
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, db)
+	if err != nil {
+		return err
+	}
+
+	err = modelServer.Start(ctx)
+	if err != nil {
+		return err
+	}
+	defer modelServer.Stop(ctx)
+
+	for _, input := range inputs {
+		err = modelServer.GenerateEmbeddings(ctx, input.ID())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func writeBlog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser) error {
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, db)
+	if err != nil {
+		return err
+	}
+	err = modelServer.Start(ctx)
+	if err != nil {
+		return err
+	}
+	defer modelServer.Stop(ctx)
+	rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
+	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, wc)
+	return err
 }
 
 func usage() {
