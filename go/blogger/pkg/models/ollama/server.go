@@ -1,7 +1,10 @@
-package models
+package ollama
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
 	"github.com/ollama/ollama/api"
@@ -13,11 +16,16 @@ import (
 type ollamaLocallyRunningServer struct {
 	model string
 	cli   *api.Client
+	mr    *api.ProcessModelResponse
 }
 
 var _ models.ModelServer = &ollamaLocallyRunningServer{}
 
 func NewOllamaLocallyRunningServer(model string) (*ollamaLocallyRunningServer, error) {
+	if os.Getenv("OLLAMA_HOST") == "" {
+		return nil, fmt.Errorf("OLLAMA_HOST is not set")
+	}
+
 	cli, err := api.ClientFromEnvironment()
 	if err != nil {
 		return nil, err
@@ -30,13 +38,30 @@ func NewOllamaLocallyRunningServer(model string) (*ollamaLocallyRunningServer, e
 }
 
 func (s *ollamaLocallyRunningServer) Start(ctx context.Context) error {
-	// todo: make sure OLLAMA_HOST is set
 	// todo: make a request to the locally running ollama server,
 	// error if response status is not 200
-	return nil
+	running, err := s.cli.ListRunning(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(running.Models) == 0 {
+		return fmt.Errorf("no running models found")
+	}
+
+	for _, r := range running.Models {
+		parts := strings.Split(r.Name, ":")
+		if parts[0] == s.model {
+			s.mr = &r
+			return nil
+		}
+	}
+
+	return fmt.Errorf("model %s not found: make sure it is running", s.model)
 }
 
 func (s *ollamaLocallyRunningServer) Stop(ctx context.Context) error {
+	s.mr = nil
 	return nil
 }
 

@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/models/ollama"
 )
 
 var model = flag.String("model", "llama3", "the model to use for generating the blog")
-var port = flag.Int("port", 11434, "the port to use for the model server")
 var createEmbeddings = flag.Bool("create-embeddings", false, "creates embeddings with the model and writes them to the database")
 var prompt = flag.String("prompt", "", "the prompt to use for generating the blog")
 
@@ -22,16 +21,16 @@ func main() {
 		usage()
 		os.Exit(1)
 	}
-	if *port == 0 {
-		fmt.Println("port is required")
-		usage()
-		os.Exit(1)
-	}
 
 	ctx := context.Background()
 
-	modelServer := models.NewOllamaLocallyRunningServer(*model, *port)
-	err := modelServer.Start(ctx)
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(*model)
+	if err != nil {
+		fmt.Println("error starting model server", err)
+		os.Exit(1)
+	}
+
+	err = modelServer.Start(ctx)
 	if err != nil {
 		fmt.Println("error starting model server", err)
 		os.Exit(1)
