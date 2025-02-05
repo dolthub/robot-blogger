@@ -5,6 +5,6 @@ import (
 )
 
 type Blogger interface {
-	UpdateInputs(ctx context.Context) error
+	UpdateInput(ctx context.Context, input Input) error
 	WriteBlog(ctx context.Context) error
 }

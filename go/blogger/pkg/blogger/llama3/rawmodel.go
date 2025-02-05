@@ -1,0 +1,28 @@
+package llama3
+
+import (
+	"context"
+
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
+)
+
+type llama3OnlyBlogger struct {
+	ms models.ModelServer
+}
+
+var _ blogger.Blogger = &llama3OnlyBlogger{}
+
+func NewLlama3OnlyBlogger(ms models.ModelServer) *llama3OnlyBlogger {
+	return &llama3OnlyBlogger{
+		ms: ms,
+	}
+}
+
+func (b *llama3OnlyBlogger) UpdateInput(ctx context.Context, input blogger.Input) error {
+	return nil
+}
+
+func (b *llama3OnlyBlogger) WriteBlog(ctx context.Context) error {
+	return nil
+}

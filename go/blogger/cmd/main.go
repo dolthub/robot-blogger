@@ -1,40 +1,69 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"os"
+
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
 )
+
+var model = flag.String("model", "llama3", "the model to use for generating the blog")
+var port = flag.Int("port", 11434, "the port to use for the model server")
+var createEmbeddings = flag.Bool("create-embeddings", false, "creates embeddings with the model and writes them to the database")
+var prompt = flag.String("prompt", "", "the prompt to use for generating the blog")
 
 func main() {
 	flag.Parse()
 
-	// vectorize inputs mode
-	// this mode will vectorize the inputs and save the vectorized inputs to the database
+	if *model == "" {
+		fmt.Println("model is required")
+		usage()
+		os.Exit(1)
+	}
+	if *port == 0 {
+		fmt.Println("port is required")
+		usage()
+		os.Exit(1)
+	}
 
-	// start model server
-	// defer stop model server
+	ctx := context.Background()
 
-	// start database server
-	// defer stop database server
+	modelServer := models.NewOllamaLocallyRunningServer(*model, *port)
+	err := modelServer.Start(ctx)
+	if err != nil {
+		fmt.Println("error starting model server", err)
+		os.Exit(1)
+	}
+	defer modelServer.Stop(ctx)
 
-	// read from database the last vectorized input
-	// search the provide inputs
+	if *createEmbeddings {
+		// start database server
+		// defer stop database server
 
-	// if the provided inputs are newer than the last vectorized input, then vectorize the inputs
-	// and save the vectorized inputs to the database
-	// update the last vectorized input in the database
+		// read from database the last vectorized input
+		// search the provide inputs
 
-	// if the provided inputs are older than the last vectorized input, then do nothing
-	// think we just need to figure out the right key for inputs
+		// if the provided inputs are newer than the last vectorized input, then vectorize the inputs
+		// and save the vectorized inputs to the database
+		// update the last vectorized input in the database
 
-	// in query mode
+		// if the provided inputs are older than the last vectorized input, then do nothing
+		// think we just need to figure out the right key for inputs
+	} else if *prompt != "" {
 
-	// use the RAG process to generate a response
-	// this will read from the database to get the whatever,
-	// then send that to the model server to get a response
+		// in query mode
 
-	// print the response
-	fmt.Println("Hello, World!")
+		// use the RAG process to generate a response
+		// this will read from the database to get the whatever,
+		// then send that to the model server to get a response
+
+		// print the response
+	} else {
+		usage()
+		os.Exit(1)
+	}
 }
 
 func usage() {
