@@ -3,6 +3,7 @@ package ollama
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -65,8 +66,39 @@ func (s *ollamaLocallyRunningServer) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string) (string, error) {
-	return "", nil
+func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
+	if wc == nil {
+		return 0, nil
+	}
+
+	stream := false
+
+	req := &api.ChatRequest{
+		Model:  s.model,
+		Stream: &stream,
+		Messages: []api.Message{
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
+	}
+
+	var m int64
+	respfn := func(resp2 api.ChatResponse) error {
+		n, err := io.Copy(wc, strings.NewReader(resp2.Message.Content))
+		if err != nil {
+			return err
+		}
+		m += n
+		return nil
+	}
+
+	err := s.cli.Chat(context.Background(), req, respfn)
+	if err != nil {
+		return 0, err
+	}
+	return m, nil
 }
 
 func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, prompt string) ([]float32, error) {

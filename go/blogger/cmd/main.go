@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger/llama3"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models/ollama"
 )
 
@@ -52,13 +53,13 @@ func main() {
 		// think we just need to figure out the right key for inputs
 	} else if *prompt != "" {
 
-		// in query mode
+		rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
+		_, err := rawBlogger.WriteBlog(ctx, *prompt, os.Stdout)
+		if err != nil {
+			fmt.Println("error writing blog", err)
+			os.Exit(1)
+		}
 
-		// use the RAG process to generate a response
-		// this will read from the database to get the whatever,
-		// then send that to the model server to get a response
-
-		// print the response
 	} else {
 		usage()
 		os.Exit(1)

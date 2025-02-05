@@ -1,7 +1,10 @@
 package models
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type Chatter interface {
-	Chat(ctx context.Context, input string) (string, error)
+	Chat(ctx context.Context, input string, wc io.WriteCloser) (int64, error)
 }

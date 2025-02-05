@@ -2,6 +2,7 @@ package llama3
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
@@ -23,6 +24,6 @@ func (b *llama3OnlyBlogger) UpdateInput(ctx context.Context, input blogger.Input
 	return nil
 }
 
-func (b *llama3OnlyBlogger) WriteBlog(ctx context.Context) error {
-	return nil
+func (b *llama3OnlyBlogger) WriteBlog(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
+	return b.ms.Chat(ctx, prompt, wc)
 }
