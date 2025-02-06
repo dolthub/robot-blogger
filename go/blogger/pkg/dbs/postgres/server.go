@@ -53,7 +53,7 @@ func (s *postgresLocallyRunningServer) createSchema(ctx context.Context, conn *p
 		return err
 	}
 	// create embeddings table if not exists
-	_, err = conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS dolthub_blog_embeddings (id text PRIMARY KEY, model_name_fk text not null, model_version_fk text not null, embedding vector(4096) not null, content text not null, created_at timestamp not null default current_timestamp, foreign key (model_name_fk, model_version_fk) references models(name, version))")
+	_, err = conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS dolthub_blog_embeddings (id text, model_name_fk text not null, model_version_fk text not null, embedding vector(4096) not null, content_md5 text not null, content text not null, created_at timestamp not null default current_timestamp, primary key(id, content_md5), foreign key (model_name_fk, model_version_fk) references models(name, version))")
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (s *postgresLocallyRunningServer) InsertModel(ctx context.Context, model st
 	return s.insertModelIfNotExists(ctx, conn, model, version, dimension)
 }
 
-func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, model, version, content string, embedding []float32) error {
+func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32) error {
 	start := time.Now()
 	defer func() {
 		s.logger.Info("postgres locally running server insert embedding", zap.String("id", id), zap.String("model", model), zap.String("version", version), zap.Duration("duration", time.Since(start)))
@@ -139,7 +139,21 @@ func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, 
 	}
 	defer conn.Close(ctx)
 
-	_, err = conn.Exec(ctx, "INSERT INTO dolthub_blog_embeddings (id, model_name_fk, model_version_fk, embedding, content) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING", id, model, version, pgvector.NewVector(embedding), content)
+	// check if embedding already exists
+	res, err := conn.Query(ctx, "SELECT * FROM dolthub_blog_embeddings WHERE id = $1 and content_md5 = $2 and model_name_fk = $3 and model_version_fk = $4;", id, contentMd5, model, version)
+	if err != nil {
+		return err
+	}
+	defer res.Close()
+	found := 0
+	for res.Next() {
+		found++
+	}
+	if found > 0 {
+		return nil
+	}
+
+	_, err = conn.Exec(ctx, "INSERT INTO dolthub_blog_embeddings (id, model_name_fk, model_version_fk, embedding, content_md5, content) VALUES ($1, $2, $3, $4, $5, $6)", id, model, version, pgvector.NewVector(embedding), contentMd5, content)
 	if err != nil {
 		return err
 	}

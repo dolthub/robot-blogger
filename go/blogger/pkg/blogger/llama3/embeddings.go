@@ -48,7 +48,11 @@ func (b *llama3WithEmbeddingsBlogger) UpdateInput(ctx context.Context, input blo
 	if err != nil {
 		return err
 	}
-	return b.db.InsertEmbedding(ctx, input.ID(), b.ms.GetModelName(), b.ms.GetModelVersion(), content, embeddings)
+	contentMd5, err := input.ContentMd5()
+	if err != nil {
+		return err
+	}
+	return b.db.InsertEmbedding(ctx, input.ID(), b.ms.GetModelName(), b.ms.GetModelVersion(), contentMd5, content, embeddings)
 }
 
 func (b *llama3WithEmbeddingsBlogger) WriteBlog(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
