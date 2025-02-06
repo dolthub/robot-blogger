@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
+	"go.uber.org/zap"
 )
 
 type postgresLocallyRunningServer struct {
@@ -17,17 +19,19 @@ type postgresLocallyRunningServer struct {
 	user         string
 	password     string
 	databaseName string
+	logger       *zap.Logger
 }
 
 var _ dbs.DatabaseServer = &postgresLocallyRunningServer{}
 
-func NewPostgresLocallyRunningServer(ctx context.Context) (*postgresLocallyRunningServer, error) {
+func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*postgresLocallyRunningServer, error) {
 	return &postgresLocallyRunningServer{
 		port:         5432,
 		host:         "127.0.0.1",
 		user:         "postgres",
 		password:     "",
 		databaseName: "robot_blogger_llama3_v1",
+		logger:       logger,
 	}, nil
 }
 
@@ -110,6 +114,11 @@ func (s *postgresLocallyRunningServer) Stop(ctx context.Context) error {
 }
 
 func (s *postgresLocallyRunningServer) InsertModel(ctx context.Context, model string, version string, dimension int) error {
+	start := time.Now()
+	defer func() {
+		s.logger.Info("postgres locally running server insert model", zap.String("model", model), zap.String("version", version), zap.Int("dimension", dimension), zap.Duration("duration", time.Since(start)))
+	}()
+
 	conn, err := s.newConn(ctx)
 	if err != nil {
 		return err
@@ -119,6 +128,11 @@ func (s *postgresLocallyRunningServer) InsertModel(ctx context.Context, model st
 }
 
 func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, model, version, content string, embedding []float32) error {
+	start := time.Now()
+	defer func() {
+		s.logger.Info("postgres locally running server insert embedding", zap.String("id", id), zap.String("model", model), zap.String("version", version), zap.Duration("duration", time.Since(start)))
+	}()
+
 	conn, err := s.newConn(ctx)
 	if err != nil {
 		return err
@@ -134,6 +148,11 @@ func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, 
 }
 
 func (s *postgresLocallyRunningServer) GetContentFromEmbeddings(ctx context.Context, embeddings []float32) (string, error) {
+	start := time.Now()
+	defer func() {
+		s.logger.Info("postgres locally running server get content from embeddings", zap.Duration("duration", time.Since(start)))
+	}()
+
 	conn, err := s.newConn(ctx)
 	if err != nil {
 		return "", err

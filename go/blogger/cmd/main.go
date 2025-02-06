@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"time"
 
 	postgres2 "github.com/dolthub/robot-blogger/go/blogger/pkg/dbs/postgres"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger/llama3"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models/ollama"
+	"go.uber.org/zap"
 )
 
 var model = flag.String("model", "llama3", "the model to use for generating the blog")
@@ -29,12 +32,16 @@ func main() {
 	}
 
 	ctx := context.Background()
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		fmt.Println("error initializing logger:", err)
+		os.Exit(1)
+	}
 
 	// db is noop for now
 	var db dbs.DatabaseServer
-	var err error
 	if *postgres {
-		db, err = postgres2.NewPostgresLocallyRunningServer(ctx)
+		db, err = postgres2.NewPostgresLocallyRunningServer(ctx, logger)
 	} else {
 		db = dbs.NewNoopDatabaseServer()
 	}
@@ -43,14 +50,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	start := time.Now()
+	defer func() {
+		logger.Info("robot blogger total time", zap.Duration("duration", time.Since(start)))
+	}()
+
 	if *inputsDir != "" {
-		err := embedInputs(ctx, *inputsDir, *model, db)
+		err := embedInputs(ctx, *inputsDir, *model, db, logger)
 		if err != nil {
 			fmt.Println("error embedding inputs", err)
 			os.Exit(1)
 		}
 	} else {
-		err := writeBlog(ctx, *model, db, os.Stdout)
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Println("error getting cwd:", err)
+			os.Exit(1)
+		}
+		today := time.Now().Format("2006-01-02")
+		f, err := os.Create(filepath.Join(cwd, fmt.Sprintf("%s-%s-generated.md", today, *model)))
+		if err != nil {
+			fmt.Println("error creating blog file:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		err = writeBlog(ctx, *model, db, f, logger)
 		if err != nil {
 			fmt.Println("error writing blog", err)
 			os.Exit(1)
@@ -58,17 +82,13 @@ func main() {
 	}
 }
 
-func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.DatabaseServer) error {
+func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.DatabaseServer, logger *zap.Logger) error {
 	inputs, err := blogger.NewMarkdownBlogPostInputsFromDir(inputsDir)
 	if err != nil {
 		return err
 	}
 
-	// todo: for now, only do single input
-	inputs = inputs[:1]
-
-	// todo: move the model server start stop to blogger
-	modelServer, err := ollama.NewOllamaLocallyRunningServer(model)
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
 	if err != nil {
 		return err
 	}
@@ -89,8 +109,8 @@ func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.Dat
 	return nil
 }
 
-func writeBlog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser) error {
-	modelServer, err := ollama.NewOllamaLocallyRunningServer(model)
+func writeBlog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
 	if err != nil {
 		return err
 	}

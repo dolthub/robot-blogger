@@ -6,24 +6,27 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
 	"github.com/ollama/ollama/api"
+	"go.uber.org/zap"
 )
 
 // this is a server that is locally running ollama
 // ollama is expected to be running on the local machine
 // and the model is expected to be locally available and running
 type ollamaLocallyRunningServer struct {
-	model string
-	cli   *api.Client
-	mr    *api.ProcessModelResponse
+	model  string
+	cli    *api.Client
+	mr     *api.ProcessModelResponse
+	logger *zap.Logger
 }
 
 var _ models.ModelServer = &ollamaLocallyRunningServer{}
 
-func NewOllamaLocallyRunningServer(model string) (*ollamaLocallyRunningServer, error) {
+func NewOllamaLocallyRunningServer(model string, logger *zap.Logger) (*ollamaLocallyRunningServer, error) {
 	if os.Getenv("OLLAMA_HOST") == "" {
 		return nil, fmt.Errorf("OLLAMA_HOST is not set")
 	}
@@ -34,8 +37,9 @@ func NewOllamaLocallyRunningServer(model string) (*ollamaLocallyRunningServer, e
 	}
 
 	return &ollamaLocallyRunningServer{
-		model: model,
-		cli:   cli,
+		model:  model,
+		cli:    cli,
+		logger: logger,
 	}, nil
 }
 
@@ -68,6 +72,11 @@ func (s *ollamaLocallyRunningServer) Stop(ctx context.Context) error {
 }
 
 func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
+	start := time.Now()
+	defer func() {
+		s.logger.Info("ollama locally running server chat", zap.String("model", s.model), zap.String("prompt", prompt), zap.Duration("duration", time.Since(start)))
+	}()
+
 	if wc == nil {
 		return 0, nil
 	}
@@ -103,6 +112,11 @@ func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string, wc
 }
 
 func (s *ollamaLocallyRunningServer) ChatWithEmbeddings(ctx context.Context, prompt string, db dbs.DatabaseServer, wc io.WriteCloser) (int64, error) {
+	start := time.Now()
+	defer func() {
+		s.logger.Info("ollama locally running server chat with embeddings", zap.String("model", s.model), zap.String("prompt", prompt), zap.Duration("duration", time.Since(start)))
+	}()
+
 	if wc == nil {
 		return 0, nil
 	}
@@ -158,11 +172,14 @@ end of reference text. The question is:
 }
 
 func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, prompt string) ([]float32, error) {
-	doc := ""
+	start := time.Now()
+	defer func() {
+		s.logger.Info("ollama locally running server generate embeddings", zap.String("model", s.model), zap.Duration("duration", time.Since(start)))
+	}()
 
 	req := &api.EmbeddingRequest{
 		Model:  s.model,
-		Prompt: doc,
+		Prompt: prompt,
 	}
 	resp, err := s.cli.Embeddings(context.Background(), req)
 	if err != nil {
