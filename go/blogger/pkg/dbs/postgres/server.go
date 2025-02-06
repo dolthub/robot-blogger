@@ -173,10 +173,17 @@ func (s *postgresLocallyRunningServer) GetContentFromEmbeddings(ctx context.Cont
 	}
 	defer conn.Close(ctx)
 
-	var content string
-	err = conn.QueryRow(ctx, "SELECT content FROM dolthub_blog_embeddings ORDER BY embedding <-> $1 LIMIT 1", pgvector.NewVector(embeddings)).Scan(&content)
+	res := struct {
+		id      string
+		content string
+	}{}
+
+	err = conn.QueryRow(ctx, "SELECT id, content FROM dolthub_blog_embeddings ORDER BY embedding <-> $1 LIMIT 1", pgvector.NewVector(embeddings)).Scan(&res.id, &res.content)
 	if err != nil {
 		return "", err
 	}
-	return content, nil
+
+	s.logger.Info("postgres locally running server get content from embeddings using id:", zap.String("id", res.id))
+
+	return res.content, nil
 }

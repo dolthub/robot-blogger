@@ -131,8 +131,6 @@ func (s *ollamaLocallyRunningServer) ChatWithEmbeddings(ctx context.Context, pro
 		return 0, err
 	}
 
-	fmt.Printf("** using content: %s\n", content[:30])
-
 	stream := false
 
 	req := &api.ChatRequest{
@@ -141,7 +139,7 @@ func (s *ollamaLocallyRunningServer) ChatWithEmbeddings(ctx context.Context, pro
 		Messages: []api.Message{
 			{
 				Role: "user",
-				Content: fmt.Sprintf(`Using the given reference text, succinctly answer the question that follows:
+				Content: fmt.Sprintf(`Using the given reference text, answer the question that follows:
 reference text is:
 
 %s
