@@ -74,6 +74,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer f.Close()
+		// err = writeRawLlama3Blog(ctx, *model, f, logger)
 		err = writeRAGLlama3Blog(ctx, *model, db, f, logger)
 		if err != nil {
 			fmt.Println("error writing blog", err)
@@ -120,7 +121,7 @@ func writeRawLlama3Blog(ctx context.Context, model string, wc io.WriteCloser, lo
 	}
 	defer rawBlogger.Close(ctx)
 
-	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, wc)
+	_, err = rawBlogger.WriteBlog(ctx, WriteDoltBlogPostInMarkdownPromptNoEmbeddings_v1, wc)
 	return err
 }
 
@@ -135,7 +136,7 @@ func writeRAGLlama3Blog(ctx context.Context, model string, db dbs.DatabaseServer
 	}
 	defer embedBlogger.Close(ctx)
 
-	_, err = embedBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, wc)
+	_, err = embedBlogger.WriteBlog(ctx, WriteDoltBlogPostInMarkdownPromptNoEmbeddings_v1, wc)
 	return err
 }
 
