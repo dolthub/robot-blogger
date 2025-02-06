@@ -19,6 +19,8 @@ import (
 )
 
 var model = flag.String("model", "llama3", "the model to use for generating the blog")
+var raw = flag.Bool("raw", false, "use raw model, no embeddings db")
+var query = flag.String("query", "", "the query to run")
 var inputsDir = flag.String("inputs", "", "the inputs directory")
 var postgres = flag.Bool("postgres", false, "use postgres for the database")
 
@@ -29,6 +31,11 @@ func main() {
 		fmt.Println("model is required")
 		usage()
 		os.Exit(1)
+	}
+
+	prompt := WriteDoltBlogPostInMarkdownPromptNoEmbeddings_v1
+	if *query != "" {
+		prompt = *query
 	}
 
 	ctx := context.Background()
@@ -74,8 +81,13 @@ func main() {
 			os.Exit(1)
 		}
 		defer f.Close()
-		// err = writeRawLlama3Blog(ctx, *model, f, logger)
-		err = writeRAGLlama3Blog(ctx, *model, db, f, logger)
+
+		if *raw {
+			err = writeRawLlama3Blog(ctx, *model, prompt, f, logger)
+		} else {
+			err = writeRAGLlama3Blog(ctx, *model, prompt, db, f, logger)
+		}
+
 		if err != nil {
 			fmt.Println("error writing blog", err)
 			os.Exit(1)
@@ -110,7 +122,7 @@ func embedLlama3Inputs(ctx context.Context, inputsDir string, model string, db d
 	return nil
 }
 
-func writeRawLlama3Blog(ctx context.Context, model string, wc io.WriteCloser, logger *zap.Logger) error {
+func writeRawLlama3Blog(ctx context.Context, model, prompt string, wc io.WriteCloser, logger *zap.Logger) error {
 	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
 	if err != nil {
 		return err
@@ -121,11 +133,11 @@ func writeRawLlama3Blog(ctx context.Context, model string, wc io.WriteCloser, lo
 	}
 	defer rawBlogger.Close(ctx)
 
-	_, err = rawBlogger.WriteBlog(ctx, WriteDoltBlogPostInMarkdownPromptNoEmbeddings_v1, wc)
+	_, err = rawBlogger.WriteBlog(ctx, prompt, wc)
 	return err
 }
 
-func writeRAGLlama3Blog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
+func writeRAGLlama3Blog(ctx context.Context, model, prompt string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
 	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
 	if err != nil {
 		return err
@@ -136,7 +148,7 @@ func writeRAGLlama3Blog(ctx context.Context, model string, db dbs.DatabaseServer
 	}
 	defer embedBlogger.Close(ctx)
 
-	_, err = embedBlogger.WriteBlog(ctx, WriteDoltBlogPostInMarkdownPromptNoEmbeddings_v1, wc)
+	_, err = embedBlogger.WriteBlog(ctx, prompt, wc)
 	return err
 }
 
