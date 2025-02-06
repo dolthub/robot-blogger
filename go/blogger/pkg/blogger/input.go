@@ -1,6 +1,10 @@
 package blogger
 
 import (
+	"bytes"
+	"crypto/md5"
+	"encoding/base64"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +14,7 @@ type Input interface {
 	ID() string
 	Path() string
 	Content() string
+	ContentMd5() (string, error)
 }
 
 type markdownBlogPostInput struct {
@@ -34,12 +39,30 @@ func (i *markdownBlogPostInput) Path() string {
 	return i.path
 }
 
+func (i *markdownBlogPostInput) contentBytes() ([]byte, error) {
+	return os.ReadFile(i.path)
+}
+
 func (i *markdownBlogPostInput) Content() string {
-	content, err := os.ReadFile(i.path)
+	content, err := i.contentBytes()
 	if err != nil {
 		return ""
 	}
 	return string(content)
+}
+
+func (i *markdownBlogPostInput) ContentMd5() (string, error) {
+	content, err := i.contentBytes()
+	if err != nil {
+		return "", err
+	}
+	r := bytes.NewReader(content)
+	hash := md5.New()
+	_, err = io.Copy(hash, r)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
 func NewMarkdownBlogPostInputsFromDir(dir string) ([]Input, error) {
