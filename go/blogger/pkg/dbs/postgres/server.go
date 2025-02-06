@@ -161,6 +161,11 @@ func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, 
 	return nil
 }
 
+type Result struct {
+	id      string
+	content string
+}
+
 func (s *postgresLocallyRunningServer) GetContentFromEmbeddings(ctx context.Context, embeddings []float32) (string, error) {
 	start := time.Now()
 	defer func() {
@@ -173,17 +178,30 @@ func (s *postgresLocallyRunningServer) GetContentFromEmbeddings(ctx context.Cont
 	}
 	defer conn.Close(ctx)
 
-	res := struct {
-		id      string
-		content string
-	}{}
-
-	err = conn.QueryRow(ctx, "SELECT id, content FROM dolthub_blog_embeddings ORDER BY embedding <-> $1 LIMIT 1", pgvector.NewVector(embeddings)).Scan(&res.id, &res.content)
+	results := make([]Result, 0)
+	res, err := conn.Query(ctx, "SELECT id, content FROM dolthub_blog_embeddings ORDER BY embedding <-> $1 LIMIT 10", pgvector.NewVector(embeddings))
 	if err != nil {
 		return "", err
 	}
+	defer res.Close()
 
-	s.logger.Info("postgres locally running server get content from embeddings using id:", zap.String("id", res.id))
+	for res.Next() {
+		var result Result
+		err = res.Scan(&result.id, &result.content)
+		if err != nil {
+			return "", err
+		}
+		results = append(results, result)
+	}
+	if res.Err() != nil {
+		return "", res.Err()
+	}
 
-	return res.content, nil
+	combinedContent := ""
+	for _, result := range results {
+		s.logger.Info("postgres locally running server get content from embeddings using id:", zap.String("id", result.id))
+		combinedContent += result.content + "\n\n"
+	}
+
+	return combinedContent, nil
 }
