@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 
+	postgres2 "github.com/dolthub/robot-blogger/go/blogger/pkg/dbs/postgres"
+
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger/llama3"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
@@ -29,7 +31,17 @@ func main() {
 	ctx := context.Background()
 
 	// db is noop for now
-	db := dbs.NewNoopDatabaseServer()
+	var db dbs.DatabaseServer
+	var err error
+	if *postgres {
+		db, err = postgres2.NewPostgresLocallyRunningServer(ctx)
+	} else {
+		db = dbs.NewNoopDatabaseServer()
+	}
+	if err != nil {
+		fmt.Println("error initializing db:", err)
+		os.Exit(1)
+	}
 
 	if *inputsDir != "" {
 		err := embedInputs(ctx, *inputsDir, *model, db)
@@ -55,19 +67,20 @@ func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.Dat
 	// todo: for now, only do single input
 	inputs = inputs[:1]
 
-	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, db)
+	// todo: move the model server start stop to blogger
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model)
 	if err != nil {
 		return err
 	}
 
-	err = modelServer.Start(ctx)
+	blgr, err := llama3.NewLlama3BloggerWithEmbeddings(ctx, modelServer, db)
 	if err != nil {
 		return err
 	}
-	defer modelServer.Stop(ctx)
+	defer blgr.Close(ctx)
 
 	for _, input := range inputs {
-		err = modelServer.GenerateEmbeddings(ctx, input.ID())
+		err = blgr.UpdateInput(ctx, input)
 		if err != nil {
 			return err
 		}
@@ -77,16 +90,16 @@ func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.Dat
 }
 
 func writeBlog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser) error {
-	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, db)
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model)
 	if err != nil {
 		return err
 	}
-	err = modelServer.Start(ctx)
+	rawBlogger, err := llama3.NewLlama3OnlyBlogger(ctx, modelServer)
 	if err != nil {
 		return err
 	}
-	defer modelServer.Stop(ctx)
-	rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
+	defer rawBlogger.Close(ctx)
+
 	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, wc)
 	return err
 }
