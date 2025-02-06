@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
 	"github.com/ollama/ollama/api"
 )
@@ -101,6 +102,61 @@ func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string, wc
 	return m, nil
 }
 
+func (s *ollamaLocallyRunningServer) ChatWithEmbeddings(ctx context.Context, prompt string, db dbs.DatabaseServer, wc io.WriteCloser) (int64, error) {
+	if wc == nil {
+		return 0, nil
+	}
+
+	embeddings, err := s.GenerateEmbeddings(ctx, prompt)
+	if err != nil {
+		return 0, err
+	}
+
+	content, err := db.GetContentFromEmbeddings(ctx, embeddings)
+	if err != nil {
+		return 0, err
+	}
+
+	fmt.Printf("** using content: %s\n", content[:30])
+
+	stream := false
+
+	req := &api.ChatRequest{
+		Model:  s.model,
+		Stream: &stream,
+		Messages: []api.Message{
+			{
+				Role: "user",
+				Content: fmt.Sprintf(`Using the given reference text, succinctly answer the question that follows:
+reference text is:
+
+%s
+
+end of reference text. The question is:
+
+%s
+				`, content, prompt),
+			},
+		},
+	}
+
+	var m int64
+	respfn := func(resp2 api.ChatResponse) error {
+		n, err := io.Copy(wc, strings.NewReader(resp2.Message.Content))
+		if err != nil {
+			return err
+		}
+		m += n
+		return nil
+	}
+
+	err = s.cli.Chat(context.Background(), req, respfn)
+	if err != nil {
+		return 0, err
+	}
+	return m, nil
+}
+
 func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, prompt string) ([]float32, error) {
 	doc := ""
 
@@ -119,4 +175,19 @@ func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, pro
 	}
 
 	return e, nil
+}
+
+func (s *ollamaLocallyRunningServer) GetModelName() string {
+	return s.model
+}
+
+func (s *ollamaLocallyRunningServer) GetModelVersion() string {
+	if s.mr == nil {
+		return ""
+	}
+	return s.mr.Digest
+}
+
+func (s *ollamaLocallyRunningServer) GetModelDimension() int {
+	return 4096
 }

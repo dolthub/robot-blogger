@@ -9,6 +9,7 @@ import (
 type Input interface {
 	ID() string
 	Path() string
+	Content() string
 }
 
 type markdownBlogPostInput struct {
@@ -31,6 +32,14 @@ func (i *markdownBlogPostInput) ID() string {
 
 func (i *markdownBlogPostInput) Path() string {
 	return i.path
+}
+
+func (i *markdownBlogPostInput) Content() string {
+	content, err := os.ReadFile(i.path)
+	if err != nil {
+		return ""
+	}
+	return string(content)
 }
 
 func NewMarkdownBlogPostInputsFromDir(dir string) ([]Input, error) {

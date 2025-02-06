@@ -7,6 +7,7 @@ import (
 
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/jackc/pgx/v5"
+	"github.com/pgvector/pgvector-go"
 )
 
 type postgresLocallyRunningServer struct {
@@ -49,6 +50,14 @@ func (s *postgresLocallyRunningServer) createSchema(ctx context.Context, conn *p
 	}
 	// create embeddings table if not exists
 	_, err = conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS dolthub_blog_embeddings (id text PRIMARY KEY, model_name_fk text not null, model_version_fk text not null, embedding vector(4096) not null, content text not null, created_at timestamp not null default current_timestamp, foreign key (model_name_fk, model_version_fk) references models(name, version))")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *postgresLocallyRunningServer) insertModelIfNotExists(ctx context.Context, conn *pgx.Conn, model string, version string, dimension int) error {
+	_, err := conn.Exec(ctx, "INSERT INTO models (name, version, dimension) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", model, version, dimension)
 	if err != nil {
 		return err
 	}
@@ -100,13 +109,41 @@ func (s *postgresLocallyRunningServer) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (s *postgresLocallyRunningServer) Embed(ctx context.Context, input []float32) error {
+func (s *postgresLocallyRunningServer) InsertModel(ctx context.Context, model string, version string, dimension int) error {
+	conn, err := s.newConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(ctx)
+	return s.insertModelIfNotExists(ctx, conn, model, version, dimension)
+}
+
+func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, model, version, content string, embedding []float32) error {
 	conn, err := s.newConn(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Close(ctx)
 
-	// todo: insert ignore embeddings into embeddings table
+	_, err = conn.Exec(ctx, "INSERT INTO dolthub_blog_embeddings (id, model_name_fk, model_version_fk, embedding, content) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING", id, model, version, pgvector.NewVector(embedding), content)
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (s *postgresLocallyRunningServer) GetContentFromEmbeddings(ctx context.Context, embeddings []float32) (string, error) {
+	conn, err := s.newConn(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close(ctx)
+
+	var content string
+	err = conn.QueryRow(ctx, "SELECT content FROM dolthub_blog_embeddings ORDER BY embedding <-> $1 LIMIT 1", pgvector.NewVector(embeddings)).Scan(&content)
+	if err != nil {
+		return "", err
+	}
+	return content, nil
 }

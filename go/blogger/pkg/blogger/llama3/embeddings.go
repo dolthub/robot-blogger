@@ -21,10 +21,21 @@ func NewLlama3BloggerWithEmbeddings(ctx context.Context, ms models.ModelServer, 
 	if err != nil {
 		return nil, err
 	}
+
 	err = ms.Start(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	modelName := ms.GetModelName()
+	modelVersion := ms.GetModelVersion()
+	modelDimension := ms.GetModelDimension()
+
+	err = db.InsertModel(ctx, modelName, modelVersion, modelDimension)
+	if err != nil {
+		return nil, err
+	}
+
 	return &llama3WithEmbeddingsBlogger{
 		ms: ms,
 		db: db,
@@ -32,15 +43,16 @@ func NewLlama3BloggerWithEmbeddings(ctx context.Context, ms models.ModelServer, 
 }
 
 func (b *llama3WithEmbeddingsBlogger) UpdateInput(ctx context.Context, input blogger.Input) error {
-	embeddings, err := b.ms.GenerateEmbeddings(ctx, input.ID())
+	content := input.Content()
+	embeddings, err := b.ms.GenerateEmbeddings(ctx, content)
 	if err != nil {
 		return err
 	}
-	return b.db.Embed(ctx, embeddings)
+	return b.db.InsertEmbedding(ctx, input.ID(), b.ms.GetModelName(), b.ms.GetModelVersion(), content, embeddings)
 }
 
 func (b *llama3WithEmbeddingsBlogger) WriteBlog(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
-	return b.ms.Chat(ctx, prompt, wc)
+	return b.ms.ChatWithEmbeddings(ctx, prompt, b.db, wc)
 }
 
 func (b *llama3WithEmbeddingsBlogger) Close(ctx context.Context) error {

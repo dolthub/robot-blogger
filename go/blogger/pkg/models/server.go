@@ -8,4 +8,7 @@ type ModelServer interface {
 
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
+	GetModelName() string
+	GetModelVersion() string
+	GetModelDimension() int
 }
