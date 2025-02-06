@@ -4,14 +4,23 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"time"
 
+	postgres2 "github.com/dolthub/robot-blogger/go/blogger/pkg/dbs/postgres"
+
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger/llama3"
+	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/blogger/pkg/models/ollama"
+	"go.uber.org/zap"
 )
 
 var model = flag.String("model", "llama3", "the model to use for generating the blog")
-var createEmbeddings = flag.Bool("create-embeddings", false, "creates embeddings with the model and writes them to the database")
+var inputsDir = flag.String("inputs", "", "the inputs directory")
+var postgres = flag.Bool("postgres", false, "use postgres for the database")
 
 func main() {
 	flag.Parse()
@@ -23,42 +32,96 @@ func main() {
 	}
 
 	ctx := context.Background()
-
-	modelServer, err := ollama.NewOllamaLocallyRunningServer(*model)
+	logger, err := zap.NewDevelopment()
 	if err != nil {
-		fmt.Println("error starting model server", err)
+		fmt.Println("error initializing logger:", err)
 		os.Exit(1)
 	}
 
-	err = modelServer.Start(ctx)
-	if err != nil {
-		fmt.Println("error starting model server", err)
-		os.Exit(1)
+	// db is noop for now
+	var db dbs.DatabaseServer
+	if *postgres {
+		db, err = postgres2.NewPostgresLocallyRunningServer(ctx, logger)
+	} else {
+		db = dbs.NewNoopDatabaseServer()
 	}
-	defer modelServer.Stop(ctx)
-
-	if *createEmbeddings {
-		// start database server
-		// defer stop database server
-
-		// read from database the last vectorized input
-		// search the provide inputs
-
-		// if the provided inputs are newer than the last vectorized input, then vectorize the inputs
-		// and save the vectorized inputs to the database
-		// update the last vectorized input in the database
-
-		// if the provided inputs are older than the last vectorized input, then do nothing
-		// think we just need to figure out the right key for inputs
-	}
-
-	rawBlogger := llama3.NewLlama3OnlyBlogger(modelServer)
-	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, os.Stdout)
 	if err != nil {
-		fmt.Println("error writing blog", err)
+		fmt.Println("error initializing db:", err)
 		os.Exit(1)
 	}
 
+	start := time.Now()
+	defer func() {
+		logger.Info("robot blogger total time", zap.Duration("duration", time.Since(start)))
+	}()
+
+	if *inputsDir != "" {
+		err := embedInputs(ctx, *inputsDir, *model, db, logger)
+		if err != nil {
+			fmt.Println("error embedding inputs", err)
+			os.Exit(1)
+		}
+	} else {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Println("error getting cwd:", err)
+			os.Exit(1)
+		}
+		today := time.Now().Format("2006-01-02")
+		f, err := os.Create(filepath.Join(cwd, fmt.Sprintf("%s-%s-generated.md", today, *model)))
+		if err != nil {
+			fmt.Println("error creating blog file:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		err = writeBlog(ctx, *model, db, f, logger)
+		if err != nil {
+			fmt.Println("error writing blog", err)
+			os.Exit(1)
+		}
+	}
+}
+
+func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.DatabaseServer, logger *zap.Logger) error {
+	inputs, err := blogger.NewMarkdownBlogPostInputsFromDir(inputsDir)
+	if err != nil {
+		return err
+	}
+
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
+	if err != nil {
+		return err
+	}
+
+	blgr, err := llama3.NewLlama3BloggerWithEmbeddings(ctx, modelServer, db)
+	if err != nil {
+		return err
+	}
+	defer blgr.Close(ctx)
+
+	for _, input := range inputs {
+		err = blgr.UpdateInput(ctx, input)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func writeBlog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
+	if err != nil {
+		return err
+	}
+	rawBlogger, err := llama3.NewLlama3OnlyBlogger(ctx, modelServer)
+	if err != nil {
+		return err
+	}
+	defer rawBlogger.Close(ctx)
+
+	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, wc)
+	return err
 }
 
 func usage() {
