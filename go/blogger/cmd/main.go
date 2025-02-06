@@ -56,7 +56,7 @@ func main() {
 	}()
 
 	if *inputsDir != "" {
-		err := embedInputs(ctx, *inputsDir, *model, db, logger)
+		err := embedLlama3Inputs(ctx, *inputsDir, *model, db, logger)
 		if err != nil {
 			fmt.Println("error embedding inputs", err)
 			os.Exit(1)
@@ -74,7 +74,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer f.Close()
-		err = writeBlog(ctx, *model, db, f, logger)
+		err = writeRAGLlama3Blog(ctx, *model, db, f, logger)
 		if err != nil {
 			fmt.Println("error writing blog", err)
 			os.Exit(1)
@@ -82,7 +82,7 @@ func main() {
 	}
 }
 
-func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.DatabaseServer, logger *zap.Logger) error {
+func embedLlama3Inputs(ctx context.Context, inputsDir string, model string, db dbs.DatabaseServer, logger *zap.Logger) error {
 	inputs, err := blogger.NewMarkdownBlogPostInputsFromDir(inputsDir)
 	if err != nil {
 		return err
@@ -109,7 +109,7 @@ func embedInputs(ctx context.Context, inputsDir string, model string, db dbs.Dat
 	return nil
 }
 
-func writeBlog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
+func writeRawLlama3Blog(ctx context.Context, model string, wc io.WriteCloser, logger *zap.Logger) error {
 	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
 	if err != nil {
 		return err
@@ -121,6 +121,21 @@ func writeBlog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.W
 	defer rawBlogger.Close(ctx)
 
 	_, err = rawBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, wc)
+	return err
+}
+
+func writeRAGLlama3Blog(ctx context.Context, model string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
+	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
+	if err != nil {
+		return err
+	}
+	embedBlogger, err := llama3.NewLlama3BloggerWithEmbeddings(ctx, modelServer, db)
+	if err != nil {
+		return err
+	}
+	defer embedBlogger.Close(ctx)
+
+	_, err = embedBlogger.WriteBlog(ctx, WriteDoltMarketingStatementPromptNoEmbeddings, wc)
 	return err
 }
 
