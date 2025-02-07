@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/modelrunner"
 	"github.com/ollama/ollama/api"
 	"go.uber.org/zap"
@@ -108,7 +107,7 @@ func (s *ollamaAPIRunner) Chat(ctx context.Context, prompt string, wc io.WriteCl
 	return m, nil
 }
 
-func (s *ollamaAPIRunner) ChatWithEmbeddings(ctx context.Context, prompt string, db dbs.DatabaseServer, wc io.WriteCloser) (int64, error) {
+func (s *ollamaAPIRunner) ChatWithRAG(ctx context.Context, prompt, ragContent string, wc io.WriteCloser) (int64, error) {
 	start := time.Now()
 	defer func() {
 		s.logger.Info("ollama api chat with embeddings", zap.String("model", s.model), zap.String("prompt", prompt), zap.Duration("duration", time.Since(start)))
@@ -116,16 +115,6 @@ func (s *ollamaAPIRunner) ChatWithEmbeddings(ctx context.Context, prompt string,
 
 	if wc == nil {
 		return 0, nil
-	}
-
-	embeddings, err := s.GenerateEmbeddings(ctx, prompt)
-	if err != nil {
-		return 0, err
-	}
-
-	content, err := db.GetContentFromEmbeddings(ctx, embeddings)
-	if err != nil {
-		return 0, err
 	}
 
 	stream := false
@@ -144,7 +133,7 @@ reference text is:
 end of reference text. The question is:
 
 %s
-				`, content, prompt),
+				`, ragContent, prompt),
 			},
 		},
 	}
@@ -159,7 +148,7 @@ end of reference text. The question is:
 		return nil
 	}
 
-	err = s.cli.Chat(context.Background(), req, respfn)
+	err := s.cli.Chat(context.Background(), req, respfn)
 	if err != nil {
 		return 0, err
 	}

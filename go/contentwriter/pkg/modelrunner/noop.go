@@ -2,17 +2,16 @@ package modelrunner
 
 import (
 	"context"
-	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
 	"io"
 )
 
 type noopModelRunner struct{}
 
-func (n noopModelRunner) Chat(ctx context.Context, input string, wc io.WriteCloser) (int64, error) {
+func (n noopModelRunner) ChatWithRAG(ctx context.Context, prompt, ragContent string, wc io.WriteCloser) (int64, error) {
 	return 0, nil
 }
 
-func (n noopModelRunner) ChatWithEmbeddings(ctx context.Context, input string, db dbs.DatabaseServer, wc io.WriteCloser) (int64, error) {
+func (n noopModelRunner) Chat(ctx context.Context, input string, wc io.WriteCloser) (int64, error) {
 	return 0, nil
 }
 

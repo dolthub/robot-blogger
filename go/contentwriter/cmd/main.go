@@ -18,11 +18,16 @@ import (
 	"go.uber.org/zap"
 )
 
-var model = flag.String("model", "llama3", "the model to use for generating the blog")
+var model = flag.String("model", "llama3", "the model to use for generating the content")
 var raw = flag.Bool("raw", false, "use raw model, no embeddings db")
 var query = flag.String("query", "", "the query to run")
 var inputsDir = flag.String("inputs", "", "the inputs directory")
 var postgres = flag.Bool("postgres", false, "use postgres for the database")
+
+// todo: fix args
+// --llama3 --query
+// --llama3 --postgres --query
+// --llama3 -inputs <dir>
 
 func main() {
 	flag.Parse()
@@ -59,7 +64,7 @@ func main() {
 
 	start := time.Now()
 	defer func() {
-		logger.Info("robot blogger total time", zap.Duration("duration", time.Since(start)))
+		logger.Info("content writer total time", zap.Duration("duration", time.Since(start)))
 	}()
 
 	if *inputsDir != "" {
@@ -83,9 +88,9 @@ func main() {
 		defer f.Close()
 
 		if *raw {
-			err = writeRawLlama3Blog(ctx, *model, prompt, f, logger)
+			err = writeRawLlama3Content(ctx, *model, prompt, f, logger)
 		} else {
-			err = writeRAGLlama3Blog(ctx, *model, prompt, db, f, logger)
+			err = writeRAGLlama3Content(ctx, *model, prompt, db, f, logger)
 		}
 
 		if err != nil {
@@ -106,7 +111,7 @@ func embedLlama3Inputs(ctx context.Context, inputsDir string, model string, db d
 		return err
 	}
 
-	cw, err := llama3.NewLlama3ContentWriter(ctx, modelServer, db)
+	cw, err := llama3.NewLlama3(ctx, modelServer, db, logger)
 	if err != nil {
 		return err
 	}
@@ -122,37 +127,38 @@ func embedLlama3Inputs(ctx context.Context, inputsDir string, model string, db d
 	return nil
 }
 
-func writeRawLlama3Blog(ctx context.Context, model, prompt string, wc io.WriteCloser, logger *zap.Logger) error {
+func writeRawLlama3Content(ctx context.Context, model, prompt string, wc io.WriteCloser, logger *zap.Logger) error {
 	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
 	if err != nil {
 		return err
 	}
-	rawBlogger, err := llama3.NewLlama3OnlyBlogger(ctx, modelServer)
+	db := dbs.NewNoopDatabaseServer()
+	rawBlogger, err := llama3.NewLlama3(ctx, modelServer, db, logger)
 	if err != nil {
 		return err
 	}
 	defer rawBlogger.Close(ctx)
 
-	_, err = rawBlogger.WriteBlog(ctx, prompt, wc)
+	_, err = rawBlogger.WriteContent(ctx, prompt, wc)
 	return err
 }
 
-func writeRAGLlama3Blog(ctx context.Context, model, prompt string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
+func writeRAGLlama3Content(ctx context.Context, model, prompt string, db dbs.DatabaseServer, wc io.WriteCloser, logger *zap.Logger) error {
 	modelServer, err := ollama.NewOllamaLocallyRunningServer(model, logger)
 	if err != nil {
 		return err
 	}
-	embedBlogger, err := llama3.NewLlama3ContentWriter(ctx, modelServer, db)
+	embedBlogger, err := llama3.NewLlama3(ctx, modelServer, db, logger)
 	if err != nil {
 		return err
 	}
 	defer embedBlogger.Close(ctx)
 
-	_, err = embedBlogger.WriteBlog(ctx, prompt, wc)
+	_, err = embedBlogger.WriteContent(ctx, prompt, wc)
 	return err
 }
 
 func usage() {
-	fmt.Println("Usage: blogger <command> [options]")
+	fmt.Println("Usage: content writer <command> [options]")
 	flag.PrintDefaults()
 }

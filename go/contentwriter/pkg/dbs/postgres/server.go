@@ -4,16 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
 	"github.com/jackc/pgx/v5"
-	"github.com/pgvector/pgvector-go"
 	"go.uber.org/zap"
 )
 
 type postgresServer struct {
 	db           *sql.DB
+	serverName   string
 	port         int
 	host         string
 	user         string
@@ -22,16 +21,22 @@ type postgresServer struct {
 	logger       *zap.Logger
 }
 
+func (s *postgresServer) Name() string {
+	return s.serverName
+}
+
 var _ dbs.DatabaseServer = &postgresServer{}
 
 func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*postgresServer, error) {
 	return &postgresServer{
-		port:     5432,
-		host:     "127.0.0.1",
-		user:     "postgres",
-		password: "",
+		serverName: dbs.Postgres,
+		port:       5432,
+		host:       "127.0.0.1",
+		user:       "postgres",
+		password:   "",
 		//databaseName: "robot_blogger_llama3_v1", // this has full blog as content
-		databaseName: "robot_blogger_llama3_v2", // this has chunked blog as content
+		//databaseName: "robot_blogger_llama3_v2", // this has chunked blog as content
+		databaseName: "robot_blogger_llama3_v3", // this is to test my refactor branch
 		logger:       logger,
 	}, nil
 }
@@ -45,20 +50,6 @@ func (s *postgresServer) GetConnectionString() string {
 
 func (s *postgresServer) newConn(ctx context.Context) (*pgx.Conn, error) {
 	return pgx.Connect(ctx, s.GetConnectionString())
-}
-
-func (s *postgresServer) createSchema(ctx context.Context, conn *pgx.Conn) error {
-	// create metadata table if not exists
-	_, err := conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS models (name text not null, version text not null, dimension int not null, created_at timestamp not null default current_timestamp, primary key (name, version))")
-	if err != nil {
-		return err
-	}
-	// create embeddings table if not exists
-	_, err = conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS dolthub_blog_embeddings (id text, model_name_fk text not null, model_version_fk text not null, doc_index int not null, embedding vector(4096) not null, content_md5 text not null, content text not null, created_at timestamp not null default current_timestamp, primary key(id, content_md5, doc_index), foreign key (model_name_fk, model_version_fk) references models(name, version))")
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *postgresServer) insertModelIfNotExists(ctx context.Context, conn *pgx.Conn, model string, version string, dimension int) error {
@@ -102,11 +93,6 @@ func (s *postgresServer) Start(ctx context.Context) error {
 		return err
 	}
 
-	err = s.createSchema(ctx, conn)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -114,95 +100,16 @@ func (s *postgresServer) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (s *postgresServer) InsertModel(ctx context.Context, model string, version string, dimension int) error {
-	start := time.Now()
-	defer func() {
-		s.logger.Info("postgres locally running server insert model", zap.String("model", model), zap.String("version", version), zap.Int("dimension", dimension), zap.Duration("duration", time.Since(start)))
-	}()
-
-	conn, err := s.newConn(ctx)
+func (s *postgresServer) QueryContext(ctx context.Context, queryFunc dbs.QueryFunc, query string, args ...interface{}) error {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
-	defer conn.Close(ctx)
-	return s.insertModelIfNotExists(ctx, conn, model, version, dimension)
+	defer rows.Close()
+	return queryFunc(ctx, rows)
 }
 
-func (s *postgresServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32, docIndex int) error {
-	start := time.Now()
-	defer func() {
-		s.logger.Info("postgres locally running server insert embedding", zap.String("id", id), zap.String("model", model), zap.String("version", version), zap.Int("doc_index", docIndex), zap.Duration("duration", time.Since(start)))
-	}()
-
-	conn, err := s.newConn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close(ctx)
-
-	// check if embedding already exists
-	res, err := conn.Query(ctx, "SELECT * FROM dolthub_blog_embeddings WHERE id = $1 and content_md5 = $2 and doc_index = $3 and model_name_fk = $4 and model_version_fk = $5;", id, contentMd5, docIndex, model, version)
-	if err != nil {
-		return err
-	}
-	defer res.Close()
-	found := 0
-	for res.Next() {
-		found++
-	}
-	if found > 0 {
-		return nil
-	}
-
-	_, err = conn.Exec(ctx, "INSERT INTO dolthub_blog_embeddings (id, model_name_fk, model_version_fk, doc_index, embedding, content_md5, content) VALUES ($1, $2, $3, $4, $5, $6, $7)", id, model, version, docIndex, pgvector.NewVector(embedding), contentMd5, content)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-type Result struct {
-	id      string
-	content string
-}
-
-func (s *postgresServer) GetContentFromEmbeddings(ctx context.Context, embeddings []float32) (string, error) {
-	start := time.Now()
-	defer func() {
-		s.logger.Info("postgres locally running server get content from embeddings", zap.Duration("duration", time.Since(start)))
-	}()
-
-	conn, err := s.newConn(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer conn.Close(ctx)
-
-	results := make([]Result, 0)
-	res, err := conn.Query(ctx, "SELECT id, content FROM dolthub_blog_embeddings ORDER BY embedding <-> $1 LIMIT 10", pgvector.NewVector(embeddings))
-	if err != nil {
-		return "", err
-	}
-	defer res.Close()
-
-	for res.Next() {
-		var result Result
-		err = res.Scan(&result.id, &result.content)
-		if err != nil {
-			return "", err
-		}
-		results = append(results, result)
-	}
-	if res.Err() != nil {
-		return "", res.Err()
-	}
-
-	combinedContent := ""
-	for _, result := range results {
-		s.logger.Info("postgres locally running server get content from embeddings using id:", zap.String("id", result.id))
-		combinedContent += result.content + "\n\n"
-	}
-
-	return combinedContent, nil
+func (s *postgresServer) ExecContext(ctx context.Context, query string, args ...interface{}) error {
+	_, err := s.db.ExecContext(ctx, query, args)
+	return err
 }

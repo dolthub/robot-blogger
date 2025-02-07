@@ -11,12 +11,16 @@ func NewNoopDatabaseServer() *noopDatabaseServer {
 	return &noopDatabaseServer{}
 }
 
-func (s *noopDatabaseServer) InsertModel(ctx context.Context, model string, version string, dimension int) error {
+func (s *noopDatabaseServer) QueryContext(ctx context.Context, queryFunc QueryFunc, query string, args ...interface{}) error {
 	return nil
 }
 
-func (s *noopDatabaseServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32, docIndex int) error {
+func (s *noopDatabaseServer) ExecContext(ctx context.Context, query string, args ...interface{}) error {
 	return nil
+}
+
+func (s *noopDatabaseServer) Name() string {
+	return Noop
 }
 
 func (s *noopDatabaseServer) Start(ctx context.Context) error {
@@ -25,8 +29,4 @@ func (s *noopDatabaseServer) Start(ctx context.Context) error {
 
 func (s *noopDatabaseServer) Stop(ctx context.Context) error {
 	return nil
-}
-
-func (s *noopDatabaseServer) GetContentFromEmbeddings(ctx context.Context, embeddings []float32) (string, error) {
-	return "", nil
 }
