@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
@@ -23,17 +22,30 @@ var postgres = flag.Bool("postgres", false, "uses postgres to store embeddings")
 var dolt = flag.Bool("dolt", false, "uses dolt to store embeddings")
 var query = flag.String("query", "", "the query to run")
 var inputsDir = flag.String("inputs", "", "the inputs directory")
+var debug = flag.Bool("debug", false, "enable debug logging")
 
 func main() {
 	flag.Parse()
 
 	model := writer.Llama3
 
+	var err error
 	ctx := context.Background()
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		fmt.Println("error initializing logger:", err)
-		os.Exit(1)
+	logger := zap.NewNop()
+	if *debug {
+		config := zap.Config{
+			Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
+			Development:      false,
+			Encoding:         "json",
+			EncoderConfig:    zap.NewProductionEncoderConfig(),
+			OutputPaths:      []string{"stderr"},
+			ErrorOutputPaths: []string{"stderr"},
+		}
+		logger, err = config.Build()
+		if err != nil {
+			panic(err)
+		}
+		defer logger.Sync()
 	}
 
 	var db dbs.DatabaseServer
@@ -62,21 +74,20 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		cwd, err := os.Getwd()
-		if err != nil {
-			fmt.Println("error getting cwd:", err)
-			os.Exit(1)
-		}
-		today := time.Now().Format("2006-01-02")
-		f, err := os.Create(filepath.Join(cwd, fmt.Sprintf("%s-%s-generated.md", today, model)))
-		if err != nil {
-			fmt.Println("error creating blog file:", err)
-			os.Exit(1)
-		}
-		defer f.Close()
+		//cwd, err := os.Getwd()
+		//if err != nil {
+		//	fmt.Println("error getting cwd:", err)
+		//	os.Exit(1)
+		//}
+		//today := time.Now().Format("2006-01-02")
+		//f, err := os.Create(filepath.Join(cwd, fmt.Sprintf("%s-%s-generated.md", today, model)))
+		//if err != nil {
+		//	fmt.Println("error creating blog file:", err)
+		//	os.Exit(1)
+		//}
+		//defer f.Close()
 
-		err = writeContent(ctx, prompt, model, db, f, logger)
-
+		err = writeContent(ctx, prompt, model, db, os.Stdout, logger)
 		if err != nil {
 			fmt.Println("error writing blog", err)
 			os.Exit(1)
