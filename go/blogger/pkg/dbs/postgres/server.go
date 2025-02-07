@@ -26,11 +26,12 @@ var _ dbs.DatabaseServer = &postgresLocallyRunningServer{}
 
 func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*postgresLocallyRunningServer, error) {
 	return &postgresLocallyRunningServer{
-		port:         5432,
-		host:         "127.0.0.1",
-		user:         "postgres",
-		password:     "",
-		databaseName: "robot_blogger_llama3_v1",
+		port:     5432,
+		host:     "127.0.0.1",
+		user:     "postgres",
+		password: "",
+		//databaseName: "robot_blogger_llama3_v1",
+		databaseName: "robot_blogger_llama3_v2",
 		logger:       logger,
 	}, nil
 }

@@ -7,19 +7,25 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/tmc/langchaingo/textsplitter"
 )
 
 type Input interface {
 	ID() string
 	Path() string
+	DocIndex() int
 	Content() string
 	ContentMd5() (string, error)
 }
 
 type markdownBlogPostInput struct {
-	prefix string
-	path   string
+	prefix   string
+	path     string
+	docIndex int
+	content  []byte
 }
 
 func NewMarkdownBlogPostInput(prefix, path string) Input {
@@ -39,15 +45,31 @@ func (i *markdownBlogPostInput) Path() string {
 	return i.path
 }
 
+func (i *markdownBlogPostInput) DocIndex() int {
+	return i.docIndex
+}
+
 func (i *markdownBlogPostInput) contentBytes() ([]byte, error) {
-	return os.ReadFile(i.path)
+	if i.content != nil {
+		return i.content, nil
+	}
+	content, err := os.ReadFile(i.path)
+	if err != nil {
+		return nil, err
+	}
+	i.content = content
+	return content, nil
 }
 
 func (i *markdownBlogPostInput) Content() string {
+	if i.content != nil {
+		return string(i.content)
+	}
 	content, err := i.contentBytes()
 	if err != nil {
 		return ""
 	}
+	i.content = content
 	return string(content)
 }
 
@@ -65,8 +87,41 @@ func (i *markdownBlogPostInput) ContentMd5() (string, error) {
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
+func SplitMarkdownBlogPostIntoInputs(prefix, path string) ([]Input, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	splitter := textsplitter.NewMarkdownTextSplitter(
+		// textsplitter.WithChunkSize(512),
+		// textsplitter.WithChunkOverlap(128),
+		textsplitter.WithHeadingHierarchy(true),
+	)
+
+	docs, err := textsplitter.CreateDocuments(splitter, []string{string(content)}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	inputs := make([]Input, 0)
+	for i, doc := range docs {
+		//fmt.Printf("path: %s, doc index: %d, doc content: %s\n", path, i, doc.PageContent)
+		inputs = append(inputs, &markdownBlogPostInput{
+			prefix:   prefix,
+			path:     path,
+			docIndex: i,
+			content:  []byte(doc.PageContent),
+		})
+	}
+
+	return inputs, nil
+
+}
+
 func NewMarkdownBlogPostInputsFromDir(dir string) ([]Input, error) {
 	inputs := make([]Input, 0)
+	files := make([]string, 0)
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -77,11 +132,22 @@ func NewMarkdownBlogPostInputsFromDir(dir string) ([]Input, error) {
 		if filepath.Ext(path) != ".md" {
 			return nil
 		}
-		inputs = append(inputs, NewMarkdownBlogPostInput(dir, path))
+		files = append(files, path)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	sort.Strings(files)
+
+	for _, file := range files {
+		ins, err := SplitMarkdownBlogPostIntoInputs(dir, file)
+		if err != nil {
+			return nil, err
+		}
+		inputs = append(inputs, ins...)
+	}
+
 	return inputs, nil
 }
