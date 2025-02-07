@@ -15,7 +15,7 @@ func (s *noopDatabaseServer) InsertModel(ctx context.Context, model string, vers
 	return nil
 }
 
-func (s *noopDatabaseServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32) error {
+func (s *noopDatabaseServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32, docIndex int) error {
 	return nil
 }
 
