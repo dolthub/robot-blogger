@@ -19,7 +19,7 @@ func (s *noopDatabaseServer) ExecContext(ctx context.Context, query string, args
 	return nil
 }
 
-func (s *noopDatabaseServer) Name() string {
+func (s *noopDatabaseServer) Name() ServerName {
 	return Noop
 }
 

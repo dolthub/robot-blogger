@@ -22,7 +22,7 @@ type ollamaAPIRunner struct {
 
 var _ modelrunner.ModelRunner = &ollamaAPIRunner{}
 
-func NewOllamaLocallyRunningServer(model string, logger *zap.Logger) (*ollamaAPIRunner, error) {
+func NewOllamaModelRunner(model string, logger *zap.Logger) (*ollamaAPIRunner, error) {
 	if os.Getenv("OLLAMA_HOST") == "" {
 		return nil, fmt.Errorf("OLLAMA_HOST is not set")
 	}

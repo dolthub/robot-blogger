@@ -3,10 +3,11 @@ package llama3
 import (
 	"context"
 	"database/sql"
-	"github.com/pgvector/pgvector-go"
-	"go.uber.org/zap"
 	"io"
 	"time"
+
+	"github.com/pgvector/pgvector-go"
+	"go.uber.org/zap"
 
 	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
 	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/modelrunner"

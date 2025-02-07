@@ -12,7 +12,7 @@ import (
 
 type postgresServer struct {
 	db           *sql.DB
-	serverName   string
+	serverName   dbs.ServerName
 	port         int
 	host         string
 	user         string
@@ -21,13 +21,13 @@ type postgresServer struct {
 	logger       *zap.Logger
 }
 
-func (s *postgresServer) Name() string {
+func (s *postgresServer) Name() dbs.ServerName {
 	return s.serverName
 }
 
 var _ dbs.DatabaseServer = &postgresServer{}
 
-func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*postgresServer, error) {
+func NewPostgresServer(ctx context.Context, logger *zap.Logger) (*postgresServer, error) {
 	return &postgresServer{
 		serverName: dbs.Postgres,
 		port:       5432,
@@ -52,14 +52,6 @@ func (s *postgresServer) newConn(ctx context.Context) (*pgx.Conn, error) {
 	return pgx.Connect(ctx, s.GetConnectionString())
 }
 
-func (s *postgresServer) insertModelIfNotExists(ctx context.Context, conn *pgx.Conn, model string, version string, dimension int) error {
-	_, err := conn.Exec(ctx, "INSERT INTO models (name, version, dimension) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", model, version, dimension)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (s *postgresServer) checkForVectorExtension(ctx context.Context, conn *pgx.Conn) error {
 	res, err := conn.Query(ctx, "SELECT * FROM pg_extension WHERE extname = 'vector';")
 	if err != nil {
@@ -74,6 +66,20 @@ func (s *postgresServer) checkForVectorExtension(ctx context.Context, conn *pgx.
 		return fmt.Errorf("could not find vector extension")
 	}
 	return res.Err()
+}
+
+func (s *postgresServer) QueryContext(ctx context.Context, queryFunc dbs.QueryFunc, query string, args ...interface{}) error {
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	return queryFunc(ctx, rows)
+}
+
+func (s *postgresServer) ExecContext(ctx context.Context, query string, args ...interface{}) error {
+	_, err := s.db.ExecContext(ctx, query, args)
+	return err
 }
 
 func (s *postgresServer) Start(ctx context.Context) error {
@@ -98,18 +104,4 @@ func (s *postgresServer) Start(ctx context.Context) error {
 
 func (s *postgresServer) Stop(ctx context.Context) error {
 	return nil
-}
-
-func (s *postgresServer) QueryContext(ctx context.Context, queryFunc dbs.QueryFunc, query string, args ...interface{}) error {
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	return queryFunc(ctx, rows)
-}
-
-func (s *postgresServer) ExecContext(ctx context.Context, query string, args ...interface{}) error {
-	_, err := s.db.ExecContext(ctx, query, args)
-	return err
 }

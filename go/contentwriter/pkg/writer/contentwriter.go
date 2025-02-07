@@ -5,6 +5,12 @@ import (
 	"io"
 )
 
+type ModelName string
+
+const (
+	Llama3 ModelName = "llama3"
+)
+
 type Closer interface {
 	Close(ctx context.Context) error
 }
