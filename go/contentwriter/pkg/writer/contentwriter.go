@@ -29,8 +29,14 @@ type ContentWriter interface {
 	Closer
 }
 
+type IndexCreator interface {
+	CreateIndex(ctx context.Context) error
+	Closer
+}
+
 type RAGContentReadWriter interface {
 	InputUpdater
 	ContentWriter
 	ContentReader
+	IndexCreator
 }

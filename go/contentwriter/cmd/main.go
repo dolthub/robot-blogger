@@ -107,6 +107,12 @@ func embedInputs(ctx context.Context, inputsDir string, model writer.ModelName, 
 				return err
 			}
 		}
+		if db.Name() == dbs.Mysql {
+			err = l3.CreateIndex(ctx)
+			if err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
