@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"time"
 
-	postgres2 "github.com/dolthub/robot-blogger/go/blogger/pkg/dbs/postgres"
+	postgres2 "github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs/postgres"
 
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger/llama3"
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/models/ollama"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/modelrunner/ollama"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/writer"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/writer/llama3"
 	"go.uber.org/zap"
 )
 
@@ -96,7 +96,7 @@ func main() {
 }
 
 func embedLlama3Inputs(ctx context.Context, inputsDir string, model string, db dbs.DatabaseServer, logger *zap.Logger) error {
-	inputs, err := blogger.NewMarkdownBlogPostInputsFromDir(inputsDir)
+	inputs, err := writer.NewMarkdownBlogPostInputsFromDir(inputsDir)
 	if err != nil {
 		return err
 	}
@@ -106,14 +106,14 @@ func embedLlama3Inputs(ctx context.Context, inputsDir string, model string, db d
 		return err
 	}
 
-	blgr, err := llama3.NewLlama3BloggerWithEmbeddings(ctx, modelServer, db)
+	cw, err := llama3.NewLlama3ContentWriter(ctx, modelServer, db)
 	if err != nil {
 		return err
 	}
-	defer blgr.Close(ctx)
+	defer cw.Close(ctx)
 
 	for _, input := range inputs {
-		err = blgr.UpdateInput(ctx, input)
+		err = cw.UpdateInput(ctx, input)
 		if err != nil {
 			return err
 		}
@@ -142,7 +142,7 @@ func writeRAGLlama3Blog(ctx context.Context, model, prompt string, db dbs.Databa
 	if err != nil {
 		return err
 	}
-	embedBlogger, err := llama3.NewLlama3BloggerWithEmbeddings(ctx, modelServer, db)
+	embedBlogger, err := llama3.NewLlama3ContentWriter(ctx, modelServer, db)
 	if err != nil {
 		return err
 	}

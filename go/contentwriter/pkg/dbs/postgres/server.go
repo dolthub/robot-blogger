@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
 	"go.uber.org/zap"
 )
 
-type postgresLocallyRunningServer struct {
+type postgresServer struct {
 	db           *sql.DB
 	port         int
 	host         string
@@ -22,10 +22,10 @@ type postgresLocallyRunningServer struct {
 	logger       *zap.Logger
 }
 
-var _ dbs.DatabaseServer = &postgresLocallyRunningServer{}
+var _ dbs.DatabaseServer = &postgresServer{}
 
-func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*postgresLocallyRunningServer, error) {
-	return &postgresLocallyRunningServer{
+func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*postgresServer, error) {
+	return &postgresServer{
 		port:     5432,
 		host:     "127.0.0.1",
 		user:     "postgres",
@@ -36,18 +36,18 @@ func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*
 	}, nil
 }
 
-func (s *postgresLocallyRunningServer) GetConnectionString() string {
+func (s *postgresServer) GetConnectionString() string {
 	if s.password == "" {
 		return fmt.Sprintf("postgres://%s@%s:%d/%s", s.user, s.host, s.port, s.databaseName)
 	}
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s", s.user, s.password, s.host, s.port, s.databaseName)
 }
 
-func (s *postgresLocallyRunningServer) newConn(ctx context.Context) (*pgx.Conn, error) {
+func (s *postgresServer) newConn(ctx context.Context) (*pgx.Conn, error) {
 	return pgx.Connect(ctx, s.GetConnectionString())
 }
 
-func (s *postgresLocallyRunningServer) createSchema(ctx context.Context, conn *pgx.Conn) error {
+func (s *postgresServer) createSchema(ctx context.Context, conn *pgx.Conn) error {
 	// create metadata table if not exists
 	_, err := conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS models (name text not null, version text not null, dimension int not null, created_at timestamp not null default current_timestamp, primary key (name, version))")
 	if err != nil {
@@ -61,7 +61,7 @@ func (s *postgresLocallyRunningServer) createSchema(ctx context.Context, conn *p
 	return nil
 }
 
-func (s *postgresLocallyRunningServer) insertModelIfNotExists(ctx context.Context, conn *pgx.Conn, model string, version string, dimension int) error {
+func (s *postgresServer) insertModelIfNotExists(ctx context.Context, conn *pgx.Conn, model string, version string, dimension int) error {
 	_, err := conn.Exec(ctx, "INSERT INTO models (name, version, dimension) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", model, version, dimension)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (s *postgresLocallyRunningServer) insertModelIfNotExists(ctx context.Contex
 	return nil
 }
 
-func (s *postgresLocallyRunningServer) checkForVectorExtension(ctx context.Context, conn *pgx.Conn) error {
+func (s *postgresServer) checkForVectorExtension(ctx context.Context, conn *pgx.Conn) error {
 	res, err := conn.Query(ctx, "SELECT * FROM pg_extension WHERE extname = 'vector';")
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (s *postgresLocallyRunningServer) checkForVectorExtension(ctx context.Conte
 	return res.Err()
 }
 
-func (s *postgresLocallyRunningServer) Start(ctx context.Context) error {
+func (s *postgresServer) Start(ctx context.Context) error {
 	conn, err := s.newConn(ctx)
 	if err != nil {
 		return err
@@ -110,11 +110,11 @@ func (s *postgresLocallyRunningServer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (s *postgresLocallyRunningServer) Stop(ctx context.Context) error {
+func (s *postgresServer) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (s *postgresLocallyRunningServer) InsertModel(ctx context.Context, model string, version string, dimension int) error {
+func (s *postgresServer) InsertModel(ctx context.Context, model string, version string, dimension int) error {
 	start := time.Now()
 	defer func() {
 		s.logger.Info("postgres locally running server insert model", zap.String("model", model), zap.String("version", version), zap.Int("dimension", dimension), zap.Duration("duration", time.Since(start)))
@@ -128,7 +128,7 @@ func (s *postgresLocallyRunningServer) InsertModel(ctx context.Context, model st
 	return s.insertModelIfNotExists(ctx, conn, model, version, dimension)
 }
 
-func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32, docIndex int) error {
+func (s *postgresServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32, docIndex int) error {
 	start := time.Now()
 	defer func() {
 		s.logger.Info("postgres locally running server insert embedding", zap.String("id", id), zap.String("model", model), zap.String("version", version), zap.Int("doc_index", docIndex), zap.Duration("duration", time.Since(start)))
@@ -167,7 +167,7 @@ type Result struct {
 	content string
 }
 
-func (s *postgresLocallyRunningServer) GetContentFromEmbeddings(ctx context.Context, embeddings []float32) (string, error) {
+func (s *postgresServer) GetContentFromEmbeddings(ctx context.Context, embeddings []float32) (string, error) {
 	start := time.Now()
 	defer func() {
 		s.logger.Info("postgres locally running server get content from embeddings", zap.Duration("duration", time.Since(start)))

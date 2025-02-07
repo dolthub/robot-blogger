@@ -4,19 +4,19 @@ import (
 	"context"
 	"io"
 
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/blogger"
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/modelrunner"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/writer"
 )
 
-type llama3WithEmbeddingsBlogger struct {
-	ms models.ModelServer
+type llama3ContentWriter struct {
+	ms modelrunner.ModelRunner
 	db dbs.DatabaseServer
 }
 
-var _ blogger.BlogWriterWithEmbeddings = &llama3WithEmbeddingsBlogger{}
+var _ writer.RAGContentWriter = &llama3ContentWriter{}
 
-func NewLlama3BloggerWithEmbeddings(ctx context.Context, ms models.ModelServer, db dbs.DatabaseServer) (*llama3WithEmbeddingsBlogger, error) {
+func NewLlama3ContentWriter(ctx context.Context, ms modelrunner.ModelRunner, db dbs.DatabaseServer) (*llama3ContentWriter, error) {
 	err := db.Start(ctx)
 	if err != nil {
 		return nil, err
@@ -36,13 +36,13 @@ func NewLlama3BloggerWithEmbeddings(ctx context.Context, ms models.ModelServer, 
 		return nil, err
 	}
 
-	return &llama3WithEmbeddingsBlogger{
+	return &llama3ContentWriter{
 		ms: ms,
 		db: db,
 	}, nil
 }
 
-func (b *llama3WithEmbeddingsBlogger) UpdateInput(ctx context.Context, input blogger.Input) error {
+func (b *llama3ContentWriter) UpdateInput(ctx context.Context, input writer.Input) error {
 	content := input.Content()
 	embeddings, err := b.ms.GenerateEmbeddings(ctx, content)
 	if err != nil {
@@ -55,11 +55,11 @@ func (b *llama3WithEmbeddingsBlogger) UpdateInput(ctx context.Context, input blo
 	return b.db.InsertEmbedding(ctx, input.ID(), b.ms.GetModelName(), b.ms.GetModelVersion(), contentMd5, content, embeddings, input.DocIndex())
 }
 
-func (b *llama3WithEmbeddingsBlogger) WriteBlog(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
+func (b *llama3ContentWriter) WriteBlog(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
 	return b.ms.ChatWithEmbeddings(ctx, prompt, b.db, wc)
 }
 
-func (b *llama3WithEmbeddingsBlogger) Close(ctx context.Context) error {
+func (b *llama3ContentWriter) Close(ctx context.Context) error {
 	err := b.db.Stop(ctx)
 	if err != nil {
 		return err

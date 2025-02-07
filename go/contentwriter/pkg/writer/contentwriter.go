@@ -1,4 +1,4 @@
-package blogger
+package writer
 
 import (
 	"context"
@@ -14,12 +14,12 @@ type InputUpdater interface {
 	Closer
 }
 
-type BlogWriter interface {
+type ContentWriter interface {
 	WriteBlog(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error)
 	Closer
 }
 
-type BlogWriterWithEmbeddings interface {
+type RAGContentWriter interface {
 	InputUpdater
-	BlogWriter
+	ContentWriter
 }

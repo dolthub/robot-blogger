@@ -8,25 +8,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/dbs"
-	"github.com/dolthub/robot-blogger/go/blogger/pkg/models"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
+	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/modelrunner"
 	"github.com/ollama/ollama/api"
 	"go.uber.org/zap"
 )
 
-// this is a server that is locally running ollama
-// ollama is expected to be running on the local machine
-// and the model is expected to be locally available and running
-type ollamaLocallyRunningServer struct {
+type ollamaAPIRunner struct {
 	model  string
 	cli    *api.Client
 	mr     *api.ProcessModelResponse
 	logger *zap.Logger
 }
 
-var _ models.ModelServer = &ollamaLocallyRunningServer{}
+var _ modelrunner.ModelRunner = &ollamaAPIRunner{}
 
-func NewOllamaLocallyRunningServer(model string, logger *zap.Logger) (*ollamaLocallyRunningServer, error) {
+func NewOllamaLocallyRunningServer(model string, logger *zap.Logger) (*ollamaAPIRunner, error) {
 	if os.Getenv("OLLAMA_HOST") == "" {
 		return nil, fmt.Errorf("OLLAMA_HOST is not set")
 	}
@@ -36,15 +33,15 @@ func NewOllamaLocallyRunningServer(model string, logger *zap.Logger) (*ollamaLoc
 		return nil, err
 	}
 
-	return &ollamaLocallyRunningServer{
+	return &ollamaAPIRunner{
 		model:  model,
 		cli:    cli,
 		logger: logger,
 	}, nil
 }
 
-func (s *ollamaLocallyRunningServer) Start(ctx context.Context) error {
-	// todo: make a request to the locally running ollama server,
+func (s *ollamaAPIRunner) Start(ctx context.Context) error {
+	// todo: make a request to the running ollama server,
 	// error if response status is not 200
 	running, err := s.cli.ListRunning(ctx)
 	if err != nil {
@@ -66,15 +63,15 @@ func (s *ollamaLocallyRunningServer) Start(ctx context.Context) error {
 	return fmt.Errorf("model %s not found: make sure it is running", s.model)
 }
 
-func (s *ollamaLocallyRunningServer) Stop(ctx context.Context) error {
+func (s *ollamaAPIRunner) Stop(ctx context.Context) error {
 	s.mr = nil
 	return nil
 }
 
-func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
+func (s *ollamaAPIRunner) Chat(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
 	start := time.Now()
 	defer func() {
-		s.logger.Info("ollama locally running server chat", zap.String("model", s.model), zap.String("prompt", prompt), zap.Duration("duration", time.Since(start)))
+		s.logger.Info("ollama api chat", zap.String("model", s.model), zap.String("prompt", prompt), zap.Duration("duration", time.Since(start)))
 	}()
 
 	if wc == nil {
@@ -111,10 +108,10 @@ func (s *ollamaLocallyRunningServer) Chat(ctx context.Context, prompt string, wc
 	return m, nil
 }
 
-func (s *ollamaLocallyRunningServer) ChatWithEmbeddings(ctx context.Context, prompt string, db dbs.DatabaseServer, wc io.WriteCloser) (int64, error) {
+func (s *ollamaAPIRunner) ChatWithEmbeddings(ctx context.Context, prompt string, db dbs.DatabaseServer, wc io.WriteCloser) (int64, error) {
 	start := time.Now()
 	defer func() {
-		s.logger.Info("ollama locally running server chat with embeddings", zap.String("model", s.model), zap.String("prompt", prompt), zap.Duration("duration", time.Since(start)))
+		s.logger.Info("ollama api chat with embeddings", zap.String("model", s.model), zap.String("prompt", prompt), zap.Duration("duration", time.Since(start)))
 	}()
 
 	if wc == nil {
@@ -169,10 +166,10 @@ end of reference text. The question is:
 	return m, nil
 }
 
-func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, prompt string) ([]float32, error) {
+func (s *ollamaAPIRunner) GenerateEmbeddings(ctx context.Context, prompt string) ([]float32, error) {
 	start := time.Now()
 	defer func() {
-		s.logger.Info("ollama locally running server generate embeddings", zap.String("model", s.model), zap.Duration("duration", time.Since(start)))
+		s.logger.Info("ollama api generate embeddings", zap.String("model", s.model), zap.Duration("duration", time.Since(start)))
 	}()
 
 	req := &api.EmbeddingRequest{
@@ -192,17 +189,17 @@ func (s *ollamaLocallyRunningServer) GenerateEmbeddings(ctx context.Context, pro
 	return e, nil
 }
 
-func (s *ollamaLocallyRunningServer) GetModelName() string {
+func (s *ollamaAPIRunner) GetModelName() string {
 	return s.model
 }
 
-func (s *ollamaLocallyRunningServer) GetModelVersion() string {
+func (s *ollamaAPIRunner) GetModelVersion() string {
 	if s.mr == nil {
 		return ""
 	}
 	return s.mr.Digest
 }
 
-func (s *ollamaLocallyRunningServer) GetModelDimension() int {
+func (s *ollamaAPIRunner) GetModelDimension() int {
 	return 4096
 }

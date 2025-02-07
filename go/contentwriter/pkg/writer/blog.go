@@ -1,25 +1,16 @@
-package blogger
+package writer
 
 import (
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
+	"github.com/tmc/langchaingo/textsplitter"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/tmc/langchaingo/textsplitter"
 )
-
-type Input interface {
-	ID() string
-	Path() string
-	DocIndex() int
-	Content() string
-	ContentMd5() (string, error)
-}
 
 type markdownBlogPostInput struct {
 	prefix   string
