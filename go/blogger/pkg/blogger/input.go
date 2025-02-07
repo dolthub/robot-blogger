@@ -94,8 +94,8 @@ func SplitMarkdownBlogPostIntoInputs(prefix, path string) ([]Input, error) {
 	}
 
 	splitter := textsplitter.NewMarkdownTextSplitter(
-		// textsplitter.WithChunkSize(512),
-		// textsplitter.WithChunkOverlap(128),
+		// textsplitter.WithChunkSize(512), // default is 512
+		// textsplitter.WithChunkOverlap(128), // default is 100
 		textsplitter.WithHeadingHierarchy(true),
 	)
 

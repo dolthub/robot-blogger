@@ -30,8 +30,8 @@ func NewPostgresLocallyRunningServer(ctx context.Context, logger *zap.Logger) (*
 		host:     "127.0.0.1",
 		user:     "postgres",
 		password: "",
-		//databaseName: "robot_blogger_llama3_v1",
-		databaseName: "robot_blogger_llama3_v2",
+		//databaseName: "robot_blogger_llama3_v1", // this has full blog as content
+		databaseName: "robot_blogger_llama3_v2", // this has chunked blog as content
 		logger:       logger,
 	}, nil
 }
@@ -54,7 +54,7 @@ func (s *postgresLocallyRunningServer) createSchema(ctx context.Context, conn *p
 		return err
 	}
 	// create embeddings table if not exists
-	_, err = conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS dolthub_blog_embeddings (id text, model_name_fk text not null, model_version_fk text not null, embedding vector(4096) not null, content_md5 text not null, content text not null, created_at timestamp not null default current_timestamp, primary key(id, content_md5), foreign key (model_name_fk, model_version_fk) references models(name, version))")
+	_, err = conn.Exec(ctx, "CREATE TABLE IF NOT EXISTS dolthub_blog_embeddings (id text, model_name_fk text not null, model_version_fk text not null, doc_index int not null, embedding vector(4096) not null, content_md5 text not null, content text not null, created_at timestamp not null default current_timestamp, primary key(id, content_md5, doc_index), foreign key (model_name_fk, model_version_fk) references models(name, version))")
 	if err != nil {
 		return err
 	}
@@ -128,10 +128,10 @@ func (s *postgresLocallyRunningServer) InsertModel(ctx context.Context, model st
 	return s.insertModelIfNotExists(ctx, conn, model, version, dimension)
 }
 
-func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32) error {
+func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, model, version, contentMd5, content string, embedding []float32, docIndex int) error {
 	start := time.Now()
 	defer func() {
-		s.logger.Info("postgres locally running server insert embedding", zap.String("id", id), zap.String("model", model), zap.String("version", version), zap.Duration("duration", time.Since(start)))
+		s.logger.Info("postgres locally running server insert embedding", zap.String("id", id), zap.String("model", model), zap.String("version", version), zap.Int("doc_index", docIndex), zap.Duration("duration", time.Since(start)))
 	}()
 
 	conn, err := s.newConn(ctx)
@@ -141,7 +141,7 @@ func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, 
 	defer conn.Close(ctx)
 
 	// check if embedding already exists
-	res, err := conn.Query(ctx, "SELECT * FROM dolthub_blog_embeddings WHERE id = $1 and content_md5 = $2 and model_name_fk = $3 and model_version_fk = $4;", id, contentMd5, model, version)
+	res, err := conn.Query(ctx, "SELECT * FROM dolthub_blog_embeddings WHERE id = $1 and content_md5 = $2 and doc_index = $3 and model_name_fk = $4 and model_version_fk = $5;", id, contentMd5, docIndex, model, version)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (s *postgresLocallyRunningServer) InsertEmbedding(ctx context.Context, id, 
 		return nil
 	}
 
-	_, err = conn.Exec(ctx, "INSERT INTO dolthub_blog_embeddings (id, model_name_fk, model_version_fk, embedding, content_md5, content) VALUES ($1, $2, $3, $4, $5, $6)", id, model, version, pgvector.NewVector(embedding), contentMd5, content)
+	_, err = conn.Exec(ctx, "INSERT INTO dolthub_blog_embeddings (id, model_name_fk, model_version_fk, doc_index, embedding, content_md5, content) VALUES ($1, $2, $3, $4, $5, $6, $7)", id, model, version, docIndex, pgvector.NewVector(embedding), contentMd5, content)
 	if err != nil {
 		return err
 	}
