@@ -262,7 +262,7 @@ func (b *llama3RagImpl) getContentFromEmbeddingsFromDolt(ctx context.Context, em
 		return nil
 	}
 
-	err := b.db.QueryContext(ctx, getResultsFunc, "SELECT id, content FROM dolthub_blog_embeddings ORDER BY embedding <-> ? LIMIT 10", embeddings)
+	err := b.db.QueryContext(ctx, getResultsFunc, "SELECT id, content FROM dolthub_blog_embeddings ORDER BY VEC_DISTANCE(embedding, ?) LIMIT 10", embeddings)
 	if err != nil {
 		return "", err
 	}
