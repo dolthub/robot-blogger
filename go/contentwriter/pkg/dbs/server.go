@@ -2,7 +2,6 @@ package dbs
 
 import (
 	"context"
-	"database/sql"
 )
 
 type ServerName string
@@ -13,7 +12,12 @@ const (
 	Noop     ServerName = "noop"
 )
 
-type QueryFunc func(ctx context.Context, rows *sql.Rows) error
+type Rows interface {
+	Err() error
+	Next() bool
+	Scan(dest ...any) error
+}
+type QueryFunc func(ctx context.Context, rows Rows) error
 
 type DatabaseServer interface {
 	Name() ServerName

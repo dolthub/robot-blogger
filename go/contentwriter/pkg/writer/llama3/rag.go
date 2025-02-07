@@ -2,7 +2,6 @@ package llama3
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"time"
@@ -135,7 +134,7 @@ func (b *llama3RagImpl) UpdateInput(ctx context.Context, input writer.Input) err
 
 func (b *llama3RagImpl) updateInputPostgres(ctx context.Context, id, model, version, contentMd5, content string, docIndex int, embedding []float32) error {
 	exists := false
-	existsFunc := func(ctx context.Context, rows *sql.Rows) error {
+	existsFunc := func(ctx context.Context, rows dbs.Rows) error {
 		found := 0
 		for rows.Next() {
 			found++
@@ -161,7 +160,7 @@ func (b *llama3RagImpl) updateInputPostgres(ctx context.Context, id, model, vers
 
 func (b *llama3RagImpl) updateInputDolt(ctx context.Context, id, model, version, contentMd5, content string, docIndex int, embedding []float32) error {
 	exists := false
-	existsFunc := func(ctx context.Context, rows *sql.Rows) error {
+	existsFunc := func(ctx context.Context, rows dbs.Rows) error {
 		found := 0
 		for rows.Next() {
 			found++
@@ -211,7 +210,7 @@ func (b *llama3RagImpl) getContentFromEmbeddingsFromPostgres(ctx context.Context
 	}()
 	results := make([]Result, 0)
 
-	getResultsFunc := func(ctx context.Context, rows *sql.Rows) error {
+	getResultsFunc := func(ctx context.Context, rows dbs.Rows) error {
 		for rows.Next() {
 			var result Result
 			err := rows.Scan(&result.id, &result.content)
@@ -233,7 +232,7 @@ func (b *llama3RagImpl) getContentFromEmbeddingsFromPostgres(ctx context.Context
 
 	combinedContent := ""
 	for _, result := range results {
-		b.logger.Info("llama3 get content from embeddings using id:", zap.String("id", result.id))
+		b.logger.Info("llama3 get content from embeddings using id:", zap.String("id", result.id), zap.String("content", result.content))
 		combinedContent += result.content + "\n\n"
 	}
 
@@ -247,7 +246,7 @@ func (b *llama3RagImpl) getContentFromEmbeddingsFromDolt(ctx context.Context, em
 	}()
 	results := make([]Result, 0)
 
-	getResultsFunc := func(ctx context.Context, rows *sql.Rows) error {
+	getResultsFunc := func(ctx context.Context, rows dbs.Rows) error {
 		for rows.Next() {
 			var result Result
 			err := rows.Scan(&result.id, &result.content)

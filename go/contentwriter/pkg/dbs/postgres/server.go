@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
@@ -11,7 +10,6 @@ import (
 )
 
 type postgresServer struct {
-	db           *sql.DB
 	serverName   dbs.ServerName
 	port         int
 	host         string
@@ -35,9 +33,9 @@ func NewPostgresServer(ctx context.Context, logger *zap.Logger) (*postgresServer
 		user:       "postgres",
 		password:   "",
 		//databaseName: "robot_blogger_llama3_v1", // this has full blog as content
-		//databaseName: "robot_blogger_llama3_v2", // this has chunked blog as content
-		databaseName: "robot_blogger_llama3_v3", // this is to test my refactor branch
-		logger:       logger,
+		databaseName: "robot_blogger_llama3_v2", // this has chunked blog as content
+		//databaseName: "robot_blogger_llama3_v3", // this is to test my refactor branch
+		logger: logger,
 	}, nil
 }
 
@@ -69,7 +67,12 @@ func (s *postgresServer) checkForVectorExtension(ctx context.Context, conn *pgx.
 }
 
 func (s *postgresServer) QueryContext(ctx context.Context, queryFunc dbs.QueryFunc, query string, args ...interface{}) error {
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	conn, err := s.newConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(ctx)
+	rows, err := conn.Query(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -78,7 +81,12 @@ func (s *postgresServer) QueryContext(ctx context.Context, queryFunc dbs.QueryFu
 }
 
 func (s *postgresServer) ExecContext(ctx context.Context, query string, args ...interface{}) error {
-	_, err := s.db.ExecContext(ctx, query, args)
+	conn, err := s.newConn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(ctx)
+	_, err = conn.Exec(ctx, query, args...)
 	return err
 }
 
