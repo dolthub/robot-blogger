@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/dolthub/robot-blogger/go/contentwriter/pkg/dbs"
 	"go.uber.org/zap"
@@ -24,20 +25,20 @@ var _ dbs.DatabaseServer = &doltServer{}
 func NewDoltServer(ctx context.Context, logger *zap.Logger) (*doltServer, error) {
 	return &doltServer{
 		serverName:   dbs.Mysql,
-		port:         3306,
-		host:         "127.0.0.1",
+		port:         3307,
+		host:         "0.0.0.0",
 		user:         "root",
 		password:     "",
-		databaseName: "robot_blogger_llama3_v2",
+		databaseName: "robot_blogger_llama3_v1",
 		logger:       logger,
 	}, nil
 }
 
 func (s *doltServer) GetConnectionString() string {
 	if s.password == "" {
-		return fmt.Sprintf("mysql://%s@%s:%d/%s", s.user, s.host, s.port, s.databaseName)
+		return fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", s.user, s.host, s.port, s.databaseName)
 	}
-	return fmt.Sprintf("mysql://%s:%s@%s:%d/%s", s.user, s.password, s.host, s.port, s.databaseName)
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", s.user, s.password, s.host, s.port, s.databaseName)
 }
 
 func (s *doltServer) newDB() (*sql.DB, error) {
@@ -65,7 +66,7 @@ func (s *doltServer) ExecContext(ctx context.Context, query string, args ...inte
 		return err
 	}
 	defer db.Close()
-	_, err = db.ExecContext(ctx, query, args)
+	_, err = db.ExecContext(ctx, query, args...)
 	return err
 }
 

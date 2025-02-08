@@ -133,6 +133,9 @@ func NewMarkdownBlogPostInputsFromDir(dir string) ([]Input, error) {
 
 	sort.Strings(files)
 
+	// todo: remove this
+	files = files[:1]
+
 	for _, file := range files {
 		ins, err := SplitMarkdownBlogPostIntoInputs(dir, file)
 		if err != nil {

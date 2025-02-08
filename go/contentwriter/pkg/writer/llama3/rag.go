@@ -2,6 +2,7 @@ package llama3
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -84,7 +85,7 @@ func createDBSchemaDolt(ctx context.Context, db dbs.DatabaseServer, logger *zap.
 	if err != nil {
 		return err
 	}
-	return db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS dolthub_blog_embeddings (id varchar(2048), model_name_fk varchar(2048) not null, model_version_fk varchar(2048) not null, doc_index int not null, embedding json not null, content_md5 varchar(2048) not null, content longtext not null, created_at timestamp not null default current_timestamp, primary key(id, content_md5, doc_index), foreign key (model_name_fk, model_version_fk) references models(name, version))")
+	return db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS ddolthub_blog_embeddings (id varchar(2048), model_name_fk varchar(2048) not null, model_version_fk varchar(2048) not null, doc_index int not null, embedding json not null, content_md5 varchar(2048) not null, content longtext not null, created_at timestamp not null default current_timestamp, primary key(id, content_md5, doc_index), foreign key (model_name_fk, model_version_fk) references models(name, version))")
 }
 
 func insertModelIfNotExists(ctx context.Context, db dbs.DatabaseServer, model string, version string, dimension int, logger *zap.Logger) error {
@@ -172,7 +173,7 @@ func (b *llama3RagImpl) updateInputDolt(ctx context.Context, id, model, version,
 	}
 
 	// check if embedding already exists
-	err := b.db.QueryContext(ctx, existsFunc, "SELECT * FROM dolthub_blog_embeddings WHERE id = ? and content_md5 = ? and doc_index = ? and model_name_fk = ? and model_version_fk = ?;", id, contentMd5, docIndex, model, version)
+	err := b.db.QueryContext(ctx, existsFunc, "SELECT * FROM ddolthub_blog_embeddings WHERE id = ? and content_md5 = ? and doc_index = ? and model_name_fk = ? and model_version_fk = ?;", id, contentMd5, docIndex, model, version)
 	if err != nil {
 		return err
 	}
@@ -181,7 +182,12 @@ func (b *llama3RagImpl) updateInputDolt(ctx context.Context, id, model, version,
 		return nil
 	}
 
-	return b.db.ExecContext(ctx, "INSERT INTO dolthub_blog_embeddings (id, model_name_fk, model_version_fk, doc_index, embedding, content_md5, content) VALUES (?, ?, ?, ?, ?, ?, ?)", id, model, version, docIndex, embedding, contentMd5, content)
+	jsonData, err := json.Marshal(embedding)
+	if err != nil {
+		return err
+	}
+
+	return b.db.ExecContext(ctx, "INSERT INTO ddolthub_blog_embeddings (id, model_name_fk, model_version_fk, doc_index, embedding, content_md5, content) VALUES (?, ?, ?, ?, ?, ?, ?)", id, model, version, docIndex, jsonData, contentMd5, content)
 }
 
 func (b *llama3RagImpl) WriteContent(ctx context.Context, prompt string, wc io.WriteCloser) (int64, error) {
@@ -261,7 +267,12 @@ func (b *llama3RagImpl) getContentFromEmbeddingsFromDolt(ctx context.Context, em
 		return nil
 	}
 
-	err := b.db.QueryContext(ctx, getResultsFunc, "SELECT id, content FROM dolthub_blog_embeddings ORDER BY VEC_DISTANCE(embedding, ?) LIMIT 10", embeddings)
+	jsonData, err := json.Marshal(embeddings)
+	if err != nil {
+		return "", err
+	}
+
+	err = b.db.QueryContext(ctx, getResultsFunc, "SELECT id, content FROM ddolthub_blog_embeddings ORDER BY VEC_DISTANCE(embedding, ?) LIMIT 10", jsonData)
 	if err != nil {
 		return "", err
 	}
@@ -285,7 +296,7 @@ func (b *llama3RagImpl) GetContentFromEmbeddings(ctx context.Context, embeddings
 }
 
 func (b *llama3RagImpl) createIndexDolt(ctx context.Context) error {
-	return b.db.ExecContext(ctx, "CREATE VECTOR INDEX vidx ON dolthub_blog_embeddings(embedding)")
+	return b.db.ExecContext(ctx, "CREATE VECTOR INDEX vidx ON ddolthub_blog_embeddings(embedding)")
 }
 
 func (b *llama3RagImpl) CreateIndex(ctx context.Context) error {
