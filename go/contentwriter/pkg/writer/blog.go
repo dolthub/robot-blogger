@@ -1,25 +1,16 @@
-package blogger
+package writer
 
 import (
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
+	"github.com/tmc/langchaingo/textsplitter"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/tmc/langchaingo/textsplitter"
 )
-
-type Input interface {
-	ID() string
-	Path() string
-	DocIndex() int
-	Content() string
-	ContentMd5() (string, error)
-}
 
 type markdownBlogPostInput struct {
 	prefix   string
@@ -94,10 +85,10 @@ func SplitMarkdownBlogPostIntoInputs(prefix, path string) ([]Input, error) {
 	}
 
 	splitter := textsplitter.NewMarkdownTextSplitter(
-		// textsplitter.WithChunkSize(512), // default is 512
+		textsplitter.WithChunkSize(1024), // default is 512
 		// textsplitter.WithChunkOverlap(128), // default is 100
-		textsplitter.WithCodeBlocks(true),
-		textsplitter.WithHeadingHierarchy(true),
+		//textsplitter.WithCodeBlocks(true),
+		//textsplitter.WithHeadingHierarchy(true),
 	)
 
 	docs, err := textsplitter.CreateDocuments(splitter, []string{string(content)}, nil)
