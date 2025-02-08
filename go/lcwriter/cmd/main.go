@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
@@ -87,10 +88,13 @@ func generateFromVectors(ctx context.Context, llm *ollama.LLM, prompt string) (s
 			return "", err
 		}
 
+		start := time.Now()
+		fmt.Println("embedding docs for blog post:", filepath.Base(file))
 		_, err = store.AddDocuments(ctx, docs)
 		if err != nil {
 			return "", err
 		}
+		fmt.Println("done embedding docs for blog post:", filepath.Base(file), time.Since(start))
 	}
 
 	docs, err := store.SimilaritySearch(ctx, prompt, 10)
