@@ -30,21 +30,21 @@ func main() {
 	var store Store
 
 	if *ollamaRunner {
-		runner = "ollama"
+		runner = OllamaRunner
 	} else {
 		panic("unsupported runner")
 	}
 
 	if *llama3Model {
-		model = "llama3"
+		model = Llama3Model
 	} else {
 		panic("unsupported model")
 	}
 
 	if *postgres {
-		store = "postgres"
+		store = PostgresStore
 	} else if *dolt {
-		store = "dolt"
+		store = DoltStore
 	} else {
 		panic("unsupported store")
 	}
@@ -80,30 +80,20 @@ func main() {
 		storeOnly = true
 	} else if *storeCustom != "" {
 		storeOnly = true
-	}
-
-	if splitter == nil {
-		panic("unable to create textsplitter")
+	} else {
+		splitter = NewNoopTextSplitter()
 	}
 
 	var err error
-	ctx := context.Background()
 	logger := zap.NewNop()
-	if *debug {
-		config := zap.Config{
-			Level:            zap.NewAtomicLevelAt(zap.DebugLevel),
-			Development:      false,
-			Encoding:         "json",
-			EncoderConfig:    zap.NewProductionEncoderConfig(),
-			OutputPaths:      []string{"stderr"},
-			ErrorOutputPaths: []string{"stderr"},
-		}
-		logger, err = config.Build()
+	if storeOnly {
+		logger, err = zap.NewDevelopment()
 		if err != nil {
 			panic(err)
 		}
 	}
-	defer logger.Sync()
+
+	ctx := context.Background()
 
 	start := time.Now()
 	defer func() {
@@ -121,7 +111,6 @@ func main() {
 	} else {
 		err = blogger.Generate(ctx, *prompt, 10)
 	}
-
 	if err != nil {
 		logger.Error("error", zap.Error(err))
 		os.Exit(1)

@@ -27,12 +27,8 @@ const (
 )
 
 type bloggerImpl struct {
-	runner Runner
-	model  Model
-	store  Store
-	dst    DocSourceType
-	llm    llms.Model
-	// e      *embeddings.EmbedderImpl
+	dst             DocSourceType
+	llm             llms.Model
 	s               vectorstores.VectorStore
 	splitter        textsplitter.TextSplitter
 	includeFileFunc func(path string) bool
@@ -94,10 +90,8 @@ func NewBlogger(
 	}
 
 	return &bloggerImpl{
-		runner:          runner,
-		model:           model,
-		store:           store,
 		s:               s,
+		llm:             llm,
 		splitter:        splitter,
 		includeFileFunc: includeFileFunc,
 		dst:             dst,
