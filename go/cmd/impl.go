@@ -32,6 +32,9 @@ type bloggerImpl struct {
 	s               vectorstores.VectorStore
 	splitter        textsplitter.TextSplitter
 	includeFileFunc func(path string) bool
+	runner          Runner
+	model           Model
+	store           Store
 	logger          *zap.Logger
 }
 
@@ -95,6 +98,9 @@ func NewBlogger(
 		splitter:        splitter,
 		includeFileFunc: includeFileFunc,
 		dst:             dst,
+		runner:          runner,
+		model:           model,
+		store:           store,
 		logger:          logger,
 	}, nil
 }
@@ -127,6 +133,9 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 		md := map[string]any{
 			"doc_source_type": string(b.dst),
 			"name":            filepath.Base(file),
+			"runner":          string(b.runner),
+			"model":           string(b.model),
+			"store":           string(b.store),
 		}
 
 		docs, err := textsplitter.CreateDocuments(b.splitter, []string{string(content)}, []map[string]any{md})
