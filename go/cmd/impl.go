@@ -14,6 +14,7 @@ import (
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/textsplitter"
 	"github.com/tmc/langchaingo/vectorstores"
+	lgdolt "github.com/tmc/langchaingo/vectorstores/dolt"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
 	"go.uber.org/zap"
 )
@@ -34,7 +35,6 @@ type bloggerImpl struct {
 	includeFileFunc func(path string) bool
 	runner          Runner
 	model           Model
-	store           Store
 	logger          *zap.Logger
 }
 
@@ -44,7 +44,7 @@ func NewBlogger(
 	ctx context.Context,
 	runner Runner,
 	model Model,
-	store Store,
+	storeType StoreType,
 	storeName string,
 	splitter textsplitter.TextSplitter,
 	includeFileFunc func(path string) bool,
@@ -77,9 +77,9 @@ func NewBlogger(
 	}
 
 	var s vectorstores.VectorStore
-	switch store {
-	case PostgresStore:
-		url := fmt.Sprintf("postgres://%s@%s:%d/%s", "postgres", "127.0.0.1", 5432, storeName)
+	switch storeType {
+	case Postgres:
+		url := getPostgresURL("postgres", "", "127.0.0.1", storeName, 5432)
 		s, err = pgvector.New(
 			ctx,
 			pgvector.WithConnectionURL(url),
@@ -88,8 +88,14 @@ func NewBlogger(
 		if err != nil {
 			return nil, err
 		}
+	case Dolt:
+		url := getDoltURL("root", "", "0.0.0.0", storeName, 3307)
+		s, err = lgdolt.New(ctx,
+			lgdolt.WithConnectionURL(url),
+			lgdolt.WithEmbedder(e),
+			lgdolt.WithCreateEmbeddingIndexAfterAddDocuments(true))
 	default:
-		return nil, fmt.Errorf("unsupported store: %s", store)
+		return nil, fmt.Errorf("unsupported store: %s", storeType)
 	}
 
 	return &bloggerImpl{
@@ -100,7 +106,6 @@ func NewBlogger(
 		dst:             dst,
 		runner:          runner,
 		model:           model,
-		store:           store,
 		logger:          logger,
 	}, nil
 }
@@ -124,6 +129,9 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 	}
 	sort.Strings(files)
 
+	// todo: remove this
+	files = files[:1]
+
 	for _, file := range files {
 		content, err := os.ReadFile(file)
 		if err != nil {
@@ -135,7 +143,6 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			"name":            filepath.Base(file),
 			"runner":          string(b.runner),
 			"model":           string(b.model),
-			"store":           string(b.store),
 		}
 
 		docs, err := textsplitter.CreateDocuments(b.splitter, []string{string(content)}, []map[string]any{md})
@@ -183,4 +190,18 @@ func (b *bloggerImpl) Generate(ctx context.Context, prompt string, numSearchDocs
 		}),
 	)
 	return err
+}
+
+func getPostgresURL(user, password, host, databaseName string, port int) string {
+	if password == "" {
+		return fmt.Sprintf("postgres://%s@%s:%d/%s", user, host, port, databaseName)
+	}
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s", user, password, host, port, databaseName)
+}
+
+func getDoltURL(user, password, host, databaseName string, port int) string {
+	if password == "" {
+		return fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, host, port, databaseName)
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, password, host, port, databaseName)
 }

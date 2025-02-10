@@ -20,14 +20,14 @@ var storeBlogs = flag.Bool("store-blogs", false, "store dolthub blog documents")
 var storeEmails = flag.Bool("store-emails", false, "store dolthub marketing email documents")
 var storeCustom = flag.String("store-custom", "", "store custom documents")
 var storeName = flag.String("store-name", "", "the name of the vector store to use")
-var debug = flag.Bool("debug", false, "enable debug logging")
+var numDocs = flag.Int("num-docs", 100, "number of RAG documents to retrieve during content generation")
 
 func main() {
 	flag.Parse()
 
 	var runner Runner
 	var model Model
-	var store Store
+	var sn StoreType
 
 	if *ollamaRunner {
 		runner = OllamaRunner
@@ -42,9 +42,9 @@ func main() {
 	}
 
 	if *postgres {
-		store = PostgresStore
+		sn = Postgres
 	} else if *dolt {
-		store = DoltStore
+		sn = Dolt
 	} else {
 		panic("unsupported store")
 	}
@@ -84,6 +84,12 @@ func main() {
 		splitter = NewNoopTextSplitter()
 	}
 
+	if !storeOnly {
+		if *numDocs == 0 {
+			panic("number of documents must be greater than zero")
+		}
+	}
+
 	var err error
 	logger := zap.NewNop()
 	if storeOnly {
@@ -100,7 +106,7 @@ func main() {
 		logger.Info("blogger total time", zap.Duration("duration", time.Since(start)))
 	}()
 
-	blogger, err := NewBlogger(ctx, runner, model, store, *storeName, splitter, includeFileFunc, DocSourceTypeBlogPost, logger)
+	blogger, err := NewBlogger(ctx, runner, model, sn, *storeName, splitter, includeFileFunc, DocSourceTypeBlogPost, logger)
 	if err != nil {
 		logger.Error("error", zap.Error(err))
 		os.Exit(1)
@@ -109,7 +115,7 @@ func main() {
 	if storeOnly {
 		err = blogger.Store(ctx, inputsDir)
 	} else {
-		err = blogger.Generate(ctx, *prompt, 10)
+		err = blogger.Generate(ctx, *prompt, *numDocs)
 	}
 	if err != nil {
 		logger.Error("error", zap.Error(err))

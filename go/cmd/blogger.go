@@ -4,7 +4,7 @@ import "context"
 
 type Runner string
 type Model string
-type Store string
+type StoreType string
 
 const (
 	OllamaRunner Runner = "ollama"
@@ -16,8 +16,8 @@ const (
 )
 
 const (
-	PostgresStore Store = "postgres"
-	DoltStore     Store = "dolt"
+	Postgres StoreType = "postgres"
+	Dolt     StoreType = "dolt"
 )
 
 type Blogger interface {
