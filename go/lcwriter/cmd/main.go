@@ -3,18 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"time"
-
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
-	"github.com/tmc/langchaingo/textsplitter"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"log"
+	"strconv"
 )
 
 func main() {
@@ -23,7 +17,7 @@ func main() {
 		log.Fatal(err)
 	}
 	ctx := context.Background()
-	completion, err := generateFromVectors(ctx, llm, "What is Dolt and DoltHub?")
+	completion, err := generateFromVectors(ctx, llm, "As a software engineer, write a blog post describing how to fork a database on DoltHub and open a pull request with proposed changes.")
 	//completion, err := generateFromSinglePrompt(ctx, llm, "Human: Who was the first man to walk on the moon?\nAssistant:")
 	if err != nil {
 		log.Fatal(err)
@@ -33,41 +27,43 @@ func main() {
 }
 
 func generateFromVectors(ctx context.Context, llm *ollama.LLM, prompt string) (string, error) {
+
 	e, err := embeddings.NewEmbedder(llm)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	dir := "/Users/dustin/src/ld/web/packages/blog/src/pages"
+	//// todo: start of this works
+	//dir := "/Users/dustin/src/ld/web/packages/blog/src/pages"
+	//
+	//files := make([]string, 0)
+	//err = filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
+	//	if walkErr != nil {
+	//		return walkErr
+	//	}
+	//	if info.IsDir() {
+	//		return nil
+	//	}
+	//	if filepath.Ext(path) != ".md" {
+	//		return nil
+	//	}
+	//	files = append(files, path)
+	//	return nil
+	//})
+	//if err != nil {
+	//	return "", err
+	//}
 
-	files := make([]string, 0)
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) != ".md" {
-			return nil
-		}
-		files = append(files, path)
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-
-	sort.Strings(files)
+	//sort.Strings(files)
 	// todo: remove this
 	// files = files[:1]
 
-	splitter := textsplitter.NewMarkdownTextSplitter(
-		textsplitter.WithChunkSize(512),    // default is 512
-		textsplitter.WithChunkOverlap(128), // default is 100
-		textsplitter.WithCodeBlocks(true),
-		textsplitter.WithHeadingHierarchy(true),
-	)
+	//splitter := textsplitter.NewMarkdownTextSplitter(
+	//	textsplitter.WithChunkSize(512),    // default is 512
+	//	textsplitter.WithChunkOverlap(128), // default is 100
+	//	textsplitter.WithCodeBlocks(true),
+	//	textsplitter.WithHeadingHierarchy(true),
+	//)
 
 	url := fmt.Sprintf("postgres://%s@%s:%d/%s", "postgres", "127.0.0.1", 5432, "robot_blogger_llama3_v4")
 	store, err := pgvector.New(
@@ -78,26 +74,32 @@ func generateFromVectors(ctx context.Context, llm *ollama.LLM, prompt string) (s
 	if err != nil {
 		return "", err
 	}
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			return "", err
-		}
-		docs, err := textsplitter.CreateDocuments(splitter, []string{string(content)}, nil)
-		if err != nil {
-			return "", err
-		}
-
-		start := time.Now()
-		fmt.Println("embedding docs for blog post:", filepath.Base(file))
-		_, err = store.AddDocuments(ctx, docs)
-		if err != nil {
-			return "", err
-		}
-		fmt.Println("done embedding docs for blog post:", filepath.Base(file), time.Since(start))
-	}
+	//for _, file := range files {
+	//	content, err := os.ReadFile(file)
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//	docs, err := textsplitter.CreateDocuments(splitter, []string{string(content)}, nil)
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//
+	//	start := time.Now()
+	//	fmt.Println("embedding docs for blog post:", filepath.Base(file))
+	//	_, err = store.AddDocuments(ctx, docs)
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//	fmt.Println("done embedding docs for blog post:", filepath.Base(file), time.Since(start))
+	//}
 
 	docs, err := store.SimilaritySearch(ctx, prompt, 10)
+	if err != nil {
+		return "", err
+	}
+
+	//todo: end of this works
+
 	//fmt.Println(docs)
 
 	//// Prompt Template
