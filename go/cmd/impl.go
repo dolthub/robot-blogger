@@ -97,6 +97,9 @@ func NewBlogger(
 	default:
 		return nil, fmt.Errorf("unsupported store: %s", storeType)
 	}
+	if err != nil {
+		return nil, err
+	}
 
 	return &bloggerImpl{
 		s:               s,
