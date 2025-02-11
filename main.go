@@ -25,6 +25,7 @@ var storeName = flag.String("store-name", "", "the name of the vector store to u
 var numDocs = flag.Int("num-docs", 100, "number of RAG documents to retrieve during content generation")
 var host = flag.String("host", "", "the host to connect to")
 var port = flag.Int("port", 0, "the port to connect to")
+var user = flag.String("user", "", "the user of the vector store")
 
 func main() {
 	flag.Parse()
@@ -37,6 +38,11 @@ func main() {
 	if *host == "" || *port == 0 {
 		panic("host and port are required")
 	}
+	if *user == "" {
+		panic("user is required")
+	}
+
+	storePassword := os.Getenv("VECTOR_STORE_PASSWORD")
 
 	dolthubBlogInputsDir := os.Getenv("DOLTHUB_BLOGS_DIR")
 	// dolthubEmailsInputsDir := os.Getenv("DOLTHUB_EMAILS_DIR")
@@ -130,7 +136,21 @@ func main() {
 		logger.Info("blogger total time", zap.Duration("duration", time.Since(start)))
 	}()
 
-	blogger, err := NewBlogger(ctx, runner, model, sn, *host, *port, *storeName, splitter, includeFileFunc, DocSourceTypeBlogPost, logger)
+	blogger, err := NewBlogger(
+		ctx,
+		runner,
+		model,
+		sn,
+		*host,
+		*user,
+		storePassword,
+		*port,
+		*storeName,
+		splitter,
+		includeFileFunc,
+		DocSourceTypeBlogPost,
+		logger,
+	)
 	if err != nil {
 		panic(err)
 	}

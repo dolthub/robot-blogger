@@ -28,12 +28,16 @@ To Store Content for later RAG use include the `--store-blogs`, `--store-emails`
 `--store-emails` requires `DOLTHUB_EMAILS_DIR` environment variable to be set.
 
 ```bash
+export VECTOR_STORE_PASSWORD=mydbpass
 export DOLTHUB_BLOGS_DIR=/path/to/dolthub/blogs
 
 ./robot-blogger \
 --ollama \
 --llama3 \
 --dolt \
+--user=root \
+--host=0.0.0.0 \
+--port=3306 \
 --store-name=robot_blogger_llama3_v1 \
 --store-blogs
 ```
@@ -43,10 +47,15 @@ export DOLTHUB_BLOGS_DIR=/path/to/dolthub/blogs
 To Generate RAG Content include the `--prompt` option with the other required flags.
 
 ```bash
+export VECTOR_STORE_PASSWORD=mydbpass
+
 ./robot-blogger \
 --ollama \
 --llama3 \
 --dolt \
+--user=root \
+--host=0.0.0.0 \
+--port=3306 \
 --store-name=robot_blogger_llama3_v1 \
 --prompt="What are Dolt and DoltHub?"
 ```
