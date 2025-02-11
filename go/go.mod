@@ -30,6 +30,4 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 )
 
-replace github.com/tmc/langchaingo => /Users/dustin/src/langchaingo
-
-//replace github.com/tmc/langchaingo => github.com/coffeegoddd/langchaingo v0.0.0-20250210221711-8e3503d48101
+replace github.com/tmc/langchaingo => github.com/coffeegoddd/langchaingo v0.0.0-20250211000132-6c8db5865c46

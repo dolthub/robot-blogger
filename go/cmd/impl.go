@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -139,12 +143,21 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			return err
 		}
 
+		contentHash, err := b.contentMd5(content)
+		if err != nil {
+			return err
+		}
+
 		md := map[string]any{
 			"doc_source_type": string(b.dst),
 			"name":            filepath.Base(file),
 			"runner":          string(b.runner),
 			"model":           string(b.model),
+			"md5":             contentHash,
 		}
+
+		// TODO: check if content has already been added
+		// TODO: if so, skip it
 
 		docs, err := textsplitter.CreateDocuments(b.splitter, []string{string(content)}, []map[string]any{md})
 		if err != nil {
@@ -191,6 +204,16 @@ func (b *bloggerImpl) Generate(ctx context.Context, prompt string, numSearchDocs
 		}),
 	)
 	return err
+}
+
+func (b *bloggerImpl) contentMd5(data []byte) (string, error) {
+	r := bytes.NewReader(data)
+	hash := md5.New()
+	_, err := io.Copy(hash, r)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
 func getPostgresURL(user, password, host, databaseName string, port int) string {
