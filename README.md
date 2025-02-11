@@ -1,21 +1,52 @@
 # robot-blogger
-a robot blog writer
 
+a RAG AI blog/email writer with Dolt as an optional vector store.
 
-## my notes
+# Dependencies
 
-following this blog: https://pgdash.io/blog/rag-with-postgresql.html
+* [golang](https://go.dev/doc/install)
+* [ollama](https://ollama.com/download)
 
-Steps:
-1. download and install ollama, https://github.com/ollama/ollama/blob/main/README.md#quickstart
-2. install postrgres and pgvector (if installing via homebrew, need postgresql@17), https://github.com/pgvector/pgvector
-3. create a new database called `robot_blogger`
-3. run create extension vector in postgres
-4. create table for documents and embeddings `create table items (id serial primary key, doc text, embedding vector(4096));`
+... more to come
 
-Ok so you need to have the model pulled/running with ollama run model name. Also need postgres running. Set env vars:
+# Installation
 
+```bash
+cd robot-blogger/go/cmd
+go install .
 ```
-export DATABASE_URL=postgres://postgres@localhost:5432/ragdemo
-export OLLAMA_HOST=127.0.0.1:11434
+
+# Example
+
+You must have a vector store running with the store name/database name already created.
+
+## Store
+
+To Store Content for later RAG use include the `--store-blogs`, `--store-emails`, or `--store-custom` options with the other required flags.
+
+`--store-blogs` requires `DOLTHUB_BLOGS_DIR` environment variable to be set.
+`--store-emails` requires `DOLTHUB_EMAILS_DIR` environment variable to be set.
+
+```bash
+export DOLTHUB_BLOGS_DIR=/path/to/dolthub/blogs
+
+./robot-blogger \
+--ollama \
+--llama3 \
+--dolt \
+--store-name=robot_blogger_llama3_v1 \
+--store-blogs
+```
+
+## Generate
+
+To Generate RAG Content include the `--prompt` option with the other required flags.
+
+```bash
+./robot-blogger \
+--ollama \
+--llama3 \
+--dolt \
+--store-name=robot_blogger_llama3_v1 \
+--prompt="What are Dolt and DoltHub?"
 ```

@@ -49,6 +49,8 @@ func NewBlogger(
 	runner Runner,
 	model Model,
 	storeType StoreType,
+	host string,
+	port int,
 	storeName string,
 	splitter textsplitter.TextSplitter,
 	includeFileFunc func(path string) bool,
@@ -83,7 +85,7 @@ func NewBlogger(
 	var s vectorstores.VectorStore
 	switch storeType {
 	case Postgres:
-		url := getPostgresURL("postgres", "", "127.0.0.1", storeName, 5432)
+		url := getPostgresURL("postgres", "", host, storeName, port)
 		s, err = pgvector.New(
 			ctx,
 			pgvector.WithConnectionURL(url),
@@ -93,7 +95,7 @@ func NewBlogger(
 			return nil, err
 		}
 	case Dolt:
-		url := getDoltURL("root", "", "0.0.0.0", storeName, 3307)
+		url := getDoltURL("root", "", host, storeName, port)
 		s, err = lgdolt.New(ctx,
 			lgdolt.WithConnectionURL(url),
 			lgdolt.WithEmbedder(e),

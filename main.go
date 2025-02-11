@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
+var help = flag.Bool("help", false, "show usage")
 var ollamaRunner = flag.Bool("ollama", true, "uses ollama llm runner")
 var llama3Model = flag.Bool("llama3", true, "uses the llama3 model for generating the content")
 var postgres = flag.Bool("postgres", false, "uses postgres to store embeddings")
@@ -20,9 +23,23 @@ var storeEmails = flag.Bool("store-emails", false, "store dolthub marketing emai
 var storeCustom = flag.String("store-custom", "", "store custom documents")
 var storeName = flag.String("store-name", "", "the name of the vector store to use")
 var numDocs = flag.Int("num-docs", 100, "number of RAG documents to retrieve during content generation")
+var host = flag.String("host", "", "the host to connect to")
+var port = flag.Int("port", 0, "the port to connect to")
 
 func main() {
 	flag.Parse()
+
+	if *help {
+		Usage()
+		return
+	}
+
+	if *host == "" || *port == 0 {
+		panic("host and port are required")
+	}
+
+	dolthubBlogInputsDir := os.Getenv("DOLTHUB_BLOGS_DIR")
+	// dolthubEmailsInputsDir := os.Getenv("DOLTHUB_EMAILS_DIR")
 
 	var runner Runner
 	var model Model
@@ -68,8 +85,11 @@ func main() {
 			textsplitter.WithHeadingHierarchy(true),
 		)
 
-		// todo: fix this to clone repo
-		inputsDir = "/Users/dustin/src/ld/web/packages/blog/src/pages"
+		if _, err := os.Stat(dolthubBlogInputsDir); os.IsNotExist(err) {
+			panic("dolthub blog inputs dir does not exist")
+		}
+
+		inputsDir = dolthubBlogInputsDir
 
 		includeFileFunc = func(path string) bool {
 			return filepath.Ext(path) == ".md"
@@ -77,8 +97,13 @@ func main() {
 
 	} else if *storeEmails {
 		storeOnly = true
+
+		panic("not implemented")
+
 	} else if *storeCustom != "" {
 		storeOnly = true
+
+		panic("not implemented")
 	} else {
 		splitter = NewNoopTextSplitter()
 	}
@@ -105,7 +130,7 @@ func main() {
 		logger.Info("blogger total time", zap.Duration("duration", time.Since(start)))
 	}()
 
-	blogger, err := NewBlogger(ctx, runner, model, sn, *storeName, splitter, includeFileFunc, DocSourceTypeBlogPost, logger)
+	blogger, err := NewBlogger(ctx, runner, model, sn, *host, *port, *storeName, splitter, includeFileFunc, DocSourceTypeBlogPost, logger)
 	if err != nil {
 		panic(err)
 	}
@@ -118,4 +143,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func Usage() {
+	fmt.Println("robot-blogger [options]")
+	flag.PrintDefaults()
 }
