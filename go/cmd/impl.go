@@ -130,10 +130,8 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 	if err != nil {
 		return err
 	}
-	sort.Strings(files)
 
-	// todo: remove this
-	files = files[:1]
+	sort.Strings(files)
 
 	for _, file := range files {
 		content, err := os.ReadFile(file)

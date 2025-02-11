@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -108,8 +107,7 @@ func main() {
 
 	blogger, err := NewBlogger(ctx, runner, model, sn, *storeName, splitter, includeFileFunc, DocSourceTypeBlogPost, logger)
 	if err != nil {
-		logger.Error("error", zap.Error(err))
-		os.Exit(1)
+		panic(err)
 	}
 
 	if storeOnly {
@@ -118,7 +116,6 @@ func main() {
 		err = blogger.Generate(ctx, *prompt, *numDocs)
 	}
 	if err != nil {
-		logger.Error("error", zap.Error(err))
-		os.Exit(1)
+		panic(err)
 	}
 }
