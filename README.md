@@ -18,7 +18,12 @@ go install .
 
 # Example
 
-You must have a vector store running with the store name/database name already created.
+You must have a vector store running with the store name/database name already created. You may also need to pull the model
+you are trying to use, ie:
+
+```bash
+ollama pull llama3
+```
 
 ## Store
 
