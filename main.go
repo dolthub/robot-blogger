@@ -89,6 +89,7 @@ func main() {
 			textsplitter.WithChunkOverlap(128), // default is 100
 			textsplitter.WithCodeBlocks(true),
 			textsplitter.WithHeadingHierarchy(true),
+			textsplitter.WithCodeBlocks(true),
 		)
 
 		if _, err := os.Stat(dolthubBlogInputsDir); os.IsNotExist(err) {
