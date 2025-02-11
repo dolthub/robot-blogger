@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +18,7 @@ import (
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/textsplitter"
 	"github.com/tmc/langchaingo/vectorstores"
+	lgdolt "github.com/tmc/langchaingo/vectorstores/dolt"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
 	"go.uber.org/zap"
 )
@@ -34,7 +39,6 @@ type bloggerImpl struct {
 	includeFileFunc func(path string) bool
 	runner          Runner
 	model           Model
-	store           Store
 	logger          *zap.Logger
 }
 
@@ -44,7 +48,11 @@ func NewBlogger(
 	ctx context.Context,
 	runner Runner,
 	model Model,
-	store Store,
+	storeType StoreType,
+	host string,
+	user string,
+	password string,
+	port int,
 	storeName string,
 	splitter textsplitter.TextSplitter,
 	includeFileFunc func(path string) bool,
@@ -77,9 +85,9 @@ func NewBlogger(
 	}
 
 	var s vectorstores.VectorStore
-	switch store {
-	case PostgresStore:
-		url := fmt.Sprintf("postgres://%s@%s:%d/%s", "postgres", "127.0.0.1", 5432, storeName)
+	switch storeType {
+	case Postgres:
+		url := getPostgresURL(user, password, host, storeName, port)
 		s, err = pgvector.New(
 			ctx,
 			pgvector.WithConnectionURL(url),
@@ -88,8 +96,17 @@ func NewBlogger(
 		if err != nil {
 			return nil, err
 		}
+	case Dolt:
+		url := getDoltURL(user, password, host, storeName, port)
+		s, err = lgdolt.New(ctx,
+			lgdolt.WithConnectionURL(url),
+			lgdolt.WithEmbedder(e),
+			lgdolt.WithCreateEmbeddingIndexAfterAddDocuments(true))
 	default:
-		return nil, fmt.Errorf("unsupported store: %s", store)
+		return nil, fmt.Errorf("unsupported store: %s", storeType)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return &bloggerImpl{
@@ -100,7 +117,6 @@ func NewBlogger(
 		dst:             dst,
 		runner:          runner,
 		model:           model,
-		store:           store,
 		logger:          logger,
 	}, nil
 }
@@ -122,10 +138,16 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 	if err != nil {
 		return err
 	}
+
 	sort.Strings(files)
 
 	for _, file := range files {
 		content, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+
+		contentHash, err := b.contentMd5(content)
 		if err != nil {
 			return err
 		}
@@ -135,8 +157,11 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			"name":            filepath.Base(file),
 			"runner":          string(b.runner),
 			"model":           string(b.model),
-			"store":           string(b.store),
+			"md5":             contentHash,
 		}
+
+		// TODO: check if content has already been added
+		// TODO: if so, skip it
 
 		docs, err := textsplitter.CreateDocuments(b.splitter, []string{string(content)}, []map[string]any{md})
 		if err != nil {
@@ -183,4 +208,28 @@ func (b *bloggerImpl) Generate(ctx context.Context, prompt string, numSearchDocs
 		}),
 	)
 	return err
+}
+
+func (b *bloggerImpl) contentMd5(data []byte) (string, error) {
+	r := bytes.NewReader(data)
+	hash := md5.New()
+	_, err := io.Copy(hash, r)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
+}
+
+func getPostgresURL(user, password, host, databaseName string, port int) string {
+	if password == "" {
+		return fmt.Sprintf("postgres://%s@%s:%d/%s", user, host, port, databaseName)
+	}
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s", user, password, host, port, databaseName)
+}
+
+func getDoltURL(user, password, host, databaseName string, port int) string {
+	if password == "" {
+		return fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, host, port, databaseName)
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, password, host, port, databaseName)
 }
