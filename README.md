@@ -64,3 +64,9 @@ export VECTOR_STORE_PASSWORD=mydbpass
 --store-name=robot_blogger_llama3_v1 \
 --prompt="What are Dolt and DoltHub?"
 ```
+
+
+# TODO
+
+* Add reranking via BM25 + embedding rerankings.
+

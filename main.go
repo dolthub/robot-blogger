@@ -15,17 +15,21 @@ import (
 var help = flag.Bool("help", false, "show usage")
 var ollamaRunner = flag.Bool("ollama", true, "uses ollama llm runner")
 var llama3Model = flag.Bool("llama3", true, "uses the llama3 model for generating the content")
-var postgres = flag.Bool("postgres", false, "uses postgres to store embeddings")
-var dolt = flag.Bool("dolt", false, "uses dolt to store embeddings")
+var postgres = flag.Bool("postgres", false, "uses postgres as vector store")
+var dolt = flag.Bool("dolt", false, "uses dolt as vector store")
+var mariadb = flag.Bool("mariadb", false, "uses mariadb as vector store")
 var prompt = flag.String("prompt", "", "the prompt to run")
 var storeBlogs = flag.Bool("store-blogs", false, "store dolthub blog documents")
 var storeEmails = flag.Bool("store-emails", false, "store dolthub marketing email documents")
 var storeCustom = flag.String("store-custom", "", "store custom documents")
 var storeName = flag.String("store-name", "", "the name of the vector store to use")
-var numDocs = flag.Int("num-docs", 100, "number of RAG documents to retrieve during content generation")
 var host = flag.String("host", "", "the host to connect to")
 var port = flag.Int("port", 0, "the port to connect to")
 var user = flag.String("user", "", "the user of the vector store")
+var topic = flag.String("topic", "", "the topic of the content to generate")
+var length = flag.Int("length", 500, "the length of the content to generate")
+var vectorDimensions = flag.Int("vector-dimensions", 1536, "the number of dimensions to use for the vector store")
+var outputFormat = flag.String("output-format", "markdown", "the output format of the content to generate")
 
 func main() {
 	flag.Parse()
@@ -67,6 +71,11 @@ func main() {
 		sn = Postgres
 	} else if *dolt {
 		sn = Dolt
+	} else if *mariadb {
+		if *vectorDimensions == 0 {
+			panic("vector dimensions are required for mariadb")
+		}
+		sn = MariaDB
 	} else {
 		panic("unsupported store")
 	}
@@ -116,8 +125,11 @@ func main() {
 	}
 
 	if !storeOnly {
-		if *numDocs == 0 {
-			panic("number of documents must be greater than zero")
+		if *topic == "" {
+			panic("topic is required")
+		}
+		if *length == 0 {
+			panic("length is required")
 		}
 	}
 
@@ -146,6 +158,7 @@ func main() {
 		*user,
 		storePassword,
 		*port,
+		*vectorDimensions,
 		*storeName,
 		splitter,
 		includeFileFunc,
@@ -159,7 +172,7 @@ func main() {
 	if storeOnly {
 		err = blogger.Store(ctx, inputsDir)
 	} else {
-		err = blogger.Generate(ctx, *prompt, *numDocs)
+		err = blogger.Generate(ctx, *prompt, *topic, *length, *outputFormat)
 	}
 	if err != nil {
 		panic(err)

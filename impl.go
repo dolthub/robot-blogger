@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/tmc/langchaingo/embeddings"
@@ -19,6 +18,7 @@ import (
 	"github.com/tmc/langchaingo/textsplitter"
 	"github.com/tmc/langchaingo/vectorstores"
 	lgdolt "github.com/tmc/langchaingo/vectorstores/dolt"
+	lgmd "github.com/tmc/langchaingo/vectorstores/mariadb"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
 	"go.uber.org/zap"
 )
@@ -52,7 +52,8 @@ func NewBlogger(
 	host string,
 	user string,
 	password string,
-	port int,
+	port,
+	vectorDimensions int,
 	storeName string,
 	splitter textsplitter.TextSplitter,
 	includeFileFunc func(path string) bool,
@@ -102,6 +103,12 @@ func NewBlogger(
 			lgdolt.WithConnectionURL(url),
 			lgdolt.WithEmbedder(e),
 			lgdolt.WithCreateEmbeddingIndexAfterAddDocuments(true))
+	case MariaDB:
+		url := getMariaDBURL(user, password, host, storeName, port)
+		s, err = lgmd.New(ctx,
+			lgmd.WithConnectionURL(url),
+			lgmd.WithEmbedder(e),
+			lgmd.WithVectorDimensions(vectorDimensions))
 	default:
 		return nil, fmt.Errorf("unsupported store: %s", storeType)
 	}
@@ -180,27 +187,98 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 	return nil
 }
 
-func (b *bloggerImpl) Generate(ctx context.Context, prompt string, numSearchDocs int) error {
-	docs, err := b.s.SimilaritySearch(ctx, prompt, numSearchDocs)
+var SystemPromptPreContentBlock = `
+You are an expert content writer specializing in technical writing and marketing writing about Dolt, DoltHub and its related products.
+Use the provided context document(s) to write new content based on the user's prompt.
+You should write in a style that is engaging and informative, and to the point.
+You should not copy the context verbatim, but rather use it as a guide to write new, engaging content.
+Be sure to introduce new perspectives and ideas. Also, try to match the company's style and voice.
+Each context document will be indicated by the following start and end tags:
+
+<context>
+</context>
+
+The user prompt will be indicated by the following start and end tags:
+
+<user_prompt>
+</user_prompt>
+
+The topic of your content will be indicated by the following start and end tags:
+
+<topic>
+</topic>
+
+The length of your content will be indicated by the following start and end tags:
+
+<length>
+</length>
+
+The output format of your content will be indicated by the following start and end tags:
+
+<output_format>
+</output_format>
+
+Here are the context documents:
+
+`
+
+var SystemPromptPostContentBlock = `
+Here are the topic, length, user's prompt, and output format:
+
+<topic>
+%s
+</topic>
+
+<length>
+%d
+</length>
+
+<user_prompt>
+%s
+</user_prompt>
+
+<output_format>
+%s
+</output_format>
+`
+
+func (b *bloggerImpl) getNumSearchDocs(length int) int {
+	if length < 300 {
+		return 2
+	} else if length < 2500 {
+		return 3
+	} else if length < 5000 {
+		return 4
+	} else if length < 7500 {
+		return 5
+	} else if length < 10000 {
+		return 6
+	}
+	return 7
+}
+
+func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error {
+	numSearchDocs := b.getNumSearchDocs(length)
+
+	docs, err := b.s.SimilaritySearch(ctx, userPrompt, numSearchDocs)
 	if err != nil {
 		return err
 	}
 
-	fullPrompt := prompt
+	systemPrompt := SystemPromptPreContentBlock
 	if len(docs) > 0 {
-		fullPrompt = "Use the following pieces of context to answer the question at the end. The context pieces are as follows:\n"
-		for idx, doc := range docs {
-			fullPrompt += "context piece " + strconv.Itoa(idx+1) + ": \n"
-			fullPrompt += fmt.Sprintf("%s\n", doc.PageContent)
-			fullPrompt += "end of context piece " + strconv.Itoa(idx+1) + "\n\n"
+		for _, doc := range docs {
+			systemPrompt += fmt.Sprintf("<context>%s</context>\n", doc.PageContent)
 		}
-		fullPrompt += "The question is: " + prompt + "\n\n"
 	}
+	systemPromptEnd := fmt.Sprintf(SystemPromptPostContentBlock, topic, length, userPrompt, outputFormat)
+	systemPrompt += systemPromptEnd
 
+	// TODO: maybe use the underlying llm.GenerateContent() method instead of GenerateFromSinglePrompt()
 	_, err = llms.GenerateFromSinglePrompt(
 		ctx,
 		b.llm,
-		fullPrompt,
+		systemPrompt,
 		llms.WithTemperature(0.8),
 		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
 			fmt.Print(string(chunk))
@@ -232,4 +310,11 @@ func getDoltURL(user, password, host, databaseName string, port int) string {
 		return fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, host, port, databaseName)
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, password, host, port, databaseName)
+}
+
+func getMariaDBURL(user, password, host, databaseName string, port int) string {
+	if password == "" {
+		return fmt.Sprintf("tcp(%s:%d)/%s", host, port, databaseName)
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", user, password, host, port, databaseName)
 }

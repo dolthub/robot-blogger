@@ -22,8 +22,8 @@ require (
 	gitlab.com/golang-commonmark/mdurl v0.0.0-20191124015652-932350d1cb84 // indirect
 	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/crypto v0.29.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )
 
-replace github.com/tmc/langchaingo => github.com/coffeegoddd/langchaingo v0.0.0-20250211000132-6c8db5865c46
+replace github.com/tmc/langchaingo => github.com/coffeegoddd/langchaingo v0.0.0-20250212220541-bbb417f6388e
