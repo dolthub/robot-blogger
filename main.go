@@ -22,10 +22,12 @@ var storeBlogs = flag.Bool("store-blogs", false, "store dolthub blog documents")
 var storeEmails = flag.Bool("store-emails", false, "store dolthub marketing email documents")
 var storeCustom = flag.String("store-custom", "", "store custom documents")
 var storeName = flag.String("store-name", "", "the name of the vector store to use")
-var numDocs = flag.Int("num-docs", 100, "number of RAG documents to retrieve during content generation")
 var host = flag.String("host", "", "the host to connect to")
 var port = flag.Int("port", 0, "the port to connect to")
 var user = flag.String("user", "", "the user of the vector store")
+var topic = flag.String("topic", "", "the topic of the content to generate")
+var length = flag.Int("length", 500, "the length of the content to generate")
+var outputFormat = flag.String("output-format", "markdown", "the output format of the content to generate")
 
 func main() {
 	flag.Parse()
@@ -40,6 +42,12 @@ func main() {
 	}
 	if *user == "" {
 		panic("user is required")
+	}
+	if *topic == "" {
+		panic("topic is required")
+	}
+	if *length == 0 {
+		panic("length is required")
 	}
 
 	storePassword := os.Getenv("VECTOR_STORE_PASSWORD")
@@ -115,12 +123,6 @@ func main() {
 		splitter = NewNoopTextSplitter()
 	}
 
-	if !storeOnly {
-		if *numDocs == 0 {
-			panic("number of documents must be greater than zero")
-		}
-	}
-
 	var err error
 	logger := zap.NewNop()
 	if storeOnly {
@@ -159,7 +161,7 @@ func main() {
 	if storeOnly {
 		err = blogger.Store(ctx, inputsDir)
 	} else {
-		err = blogger.Generate(ctx, *prompt, *numDocs)
+		err = blogger.Generate(ctx, *prompt, *topic, *length, *outputFormat)
 	}
 	if err != nil {
 		panic(err)

@@ -17,10 +17,11 @@ const (
 
 const (
 	Postgres StoreType = "postgres"
+	MariaDB  StoreType = "mariadb"
 	Dolt     StoreType = "dolt"
 )
 
 type Blogger interface {
 	Store(ctx context.Context, dir string) error
-	Generate(ctx context.Context, prompt string, numSearchDocs int) error
+	Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error
 }
