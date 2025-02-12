@@ -15,6 +15,7 @@ import (
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
+	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/textsplitter"
 	"github.com/tmc/langchaingo/vectorstores"
 	lgdolt "github.com/tmc/langchaingo/vectorstores/dolt"
@@ -78,8 +79,21 @@ func NewBlogger(
 		if err != nil {
 			return nil, err
 		}
+	case OpenAIRunner:
+		llm, err = openai.New(openai.WithModel(string(model)))
+		if err != nil {
+			return nil, err
+		}
+		llmClient, ok := llm.(embeddings.EmbedderClient)
+		if !ok {
+			return nil, fmt.Errorf("llm does not implement embeddings.EmbedderClient")
+		}
+		e, err = embeddings.NewEmbedder(llmClient)
+		if err != nil {
+			return nil, err
+		}
 	default:
-		return nil, fmt.Errorf("unsupported runner: %s", runner)
+		return nil, fmt.Errorf("unsupported llm runner: %s", runner)
 	}
 	if err != nil {
 		return nil, err
@@ -110,7 +124,7 @@ func NewBlogger(
 			lgmd.WithEmbedder(e),
 			lgmd.WithVectorDimensions(vectorDimensions))
 	default:
-		return nil, fmt.Errorf("unsupported store: %s", storeType)
+		return nil, fmt.Errorf("unsupported vector store: %s", storeType)
 	}
 	if err != nil {
 		return nil, err

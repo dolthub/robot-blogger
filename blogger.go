@@ -12,7 +12,8 @@ const (
 )
 
 const (
-	Llama3Model Model = "llama3"
+	Llama3Model    Model = "llama3"
+	ChatGPT4oModel Model = "chatgpt-4o-latest"
 )
 
 const (

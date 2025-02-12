@@ -13,8 +13,10 @@ import (
 )
 
 var help = flag.Bool("help", false, "show usage")
-var ollamaRunner = flag.Bool("ollama", true, "uses ollama llm runner")
+var ollamaRunner = flag.Bool("ollama", false, "uses ollama llm runner")
+var openaiRunner = flag.Bool("openai", false, "uses openai llm runner")
 var llama3Model = flag.Bool("llama3", true, "uses the llama3 model for generating the content")
+var chatgpt4oModel = flag.Bool("chatgpt4o", false, "uses the chatgpt-4o-latest model for generating the content")
 var postgres = flag.Bool("postgres", false, "uses postgres as vector store")
 var dolt = flag.Bool("dolt", false, "uses dolt as vector store")
 var mariadb = flag.Bool("mariadb", false, "uses mariadb as vector store")
@@ -57,12 +59,19 @@ func main() {
 
 	if *ollamaRunner {
 		runner = OllamaRunner
+	} else if *openaiRunner {
+		if os.Getenv("OPENAI_API_KEY") == "" {
+			panic("OPENAI_API_KEY is required")
+		}
+		runner = OpenAIRunner
 	} else {
 		panic("unsupported runner")
 	}
 
 	if *llama3Model {
 		model = Llama3Model
+	} else if *chatgpt4oModel {
+		model = ChatGPT4oModel
 	} else {
 		panic("unsupported model")
 	}
