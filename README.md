@@ -69,6 +69,4 @@ export VECTOR_STORE_PASSWORD=mydbpass
 # TODO
 
 * Add reranking via BM25 + embedding rerankings.
-* Dynamically adjust the number of chunks retrieved based on the prompt, ie for 500-800 word content, retrieve 3-5 chunks, for 1000-1500 word content, retrieve 5-7 chunks, etc.
-
 
