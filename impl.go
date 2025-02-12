@@ -18,6 +18,7 @@ import (
 	"github.com/tmc/langchaingo/textsplitter"
 	"github.com/tmc/langchaingo/vectorstores"
 	lgdolt "github.com/tmc/langchaingo/vectorstores/dolt"
+	lgmd "github.com/tmc/langchaingo/vectorstores/mariadb"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
 	"go.uber.org/zap"
 )
@@ -51,7 +52,8 @@ func NewBlogger(
 	host string,
 	user string,
 	password string,
-	port int,
+	port,
+	vectorDimensions int,
 	storeName string,
 	splitter textsplitter.TextSplitter,
 	includeFileFunc func(path string) bool,
@@ -101,6 +103,12 @@ func NewBlogger(
 			lgdolt.WithConnectionURL(url),
 			lgdolt.WithEmbedder(e),
 			lgdolt.WithCreateEmbeddingIndexAfterAddDocuments(true))
+	case MariaDB:
+		url := getMariaDBURL(user, password, host, storeName, port)
+		s, err = lgmd.New(ctx,
+			lgmd.WithConnectionURL(url),
+			lgmd.WithEmbedder(e),
+			lgmd.WithVectorDimensions(vectorDimensions))
 	default:
 		return nil, fmt.Errorf("unsupported store: %s", storeType)
 	}

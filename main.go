@@ -15,8 +15,9 @@ import (
 var help = flag.Bool("help", false, "show usage")
 var ollamaRunner = flag.Bool("ollama", true, "uses ollama llm runner")
 var llama3Model = flag.Bool("llama3", true, "uses the llama3 model for generating the content")
-var postgres = flag.Bool("postgres", false, "uses postgres to store embeddings")
-var dolt = flag.Bool("dolt", false, "uses dolt to store embeddings")
+var postgres = flag.Bool("postgres", false, "uses postgres as vector store")
+var dolt = flag.Bool("dolt", false, "uses dolt as vector store")
+var mariadb = flag.Bool("mariadb", false, "uses mariadb as vector store")
 var prompt = flag.String("prompt", "", "the prompt to run")
 var storeBlogs = flag.Bool("store-blogs", false, "store dolthub blog documents")
 var storeEmails = flag.Bool("store-emails", false, "store dolthub marketing email documents")
@@ -27,6 +28,7 @@ var port = flag.Int("port", 0, "the port to connect to")
 var user = flag.String("user", "", "the user of the vector store")
 var topic = flag.String("topic", "", "the topic of the content to generate")
 var length = flag.Int("length", 500, "the length of the content to generate")
+var vectorDimensions = flag.Int("vector-dimensions", 1536, "the number of dimensions to use for the vector store")
 var outputFormat = flag.String("output-format", "markdown", "the output format of the content to generate")
 
 func main() {
@@ -75,6 +77,11 @@ func main() {
 		sn = Postgres
 	} else if *dolt {
 		sn = Dolt
+	} else if *mariadb {
+		if *vectorDimensions == 0 {
+			panic("vector dimensions are required for mariadb")
+		}
+		sn = MariaDB
 	} else {
 		panic("unsupported store")
 	}
@@ -148,6 +155,7 @@ func main() {
 		*user,
 		storePassword,
 		*port,
+		*vectorDimensions,
 		*storeName,
 		splitter,
 		includeFileFunc,
