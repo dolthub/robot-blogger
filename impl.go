@@ -29,9 +29,10 @@ import (
 type DocSourceType string
 
 const (
-	DocSourceTypeBlogPost DocSourceType = "blog_post"
-	DocSourceTypeEmail    DocSourceType = "email"
-	DocSourceTypeCustom   DocSourceType = "custom"
+	DocSourceTypeBlogPost      DocSourceType = "blog_post"
+	DocSourceTypeEmail         DocSourceType = "email"
+	DocSourceTypeDocumentation DocSourceType = "documentation"
+	DocSourceTypeCustom        DocSourceType = "custom"
 )
 
 type bloggerImpl struct {
@@ -262,17 +263,17 @@ Here are the topic, length, user's prompt, and output format:
 
 func (b *bloggerImpl) getNumSearchDocs(length int) int {
 	if length < 300 {
-		return 2
-	} else if length < 2500 {
 		return 3
-	} else if length < 5000 {
+	} else if length < 2500 {
 		return 4
-	} else if length < 7500 {
+	} else if length < 5000 {
 		return 5
-	} else if length < 10000 {
+	} else if length < 7500 {
 		return 6
+	} else if length < 10000 {
+		return 7
 	}
-	return 7
+	return 9
 }
 
 func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error {

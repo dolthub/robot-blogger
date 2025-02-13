@@ -23,6 +23,7 @@ var mariadb = flag.Bool("mariadb", false, "uses mariadb as vector store")
 var prompt = flag.String("prompt", "", "the prompt to run")
 var storeBlogs = flag.Bool("store-blogs", false, "store dolthub blog documents")
 var storeEmails = flag.Bool("store-emails", false, "store dolthub marketing email documents")
+var storeDocs = flag.Bool("store-docs", false, "store dolthub docs documents")
 var storeCustom = flag.String("store-custom", "", "store custom documents")
 var storeName = flag.String("store-name", "", "the name of the vector store to use")
 var host = flag.String("host", "", "the host to connect to")
@@ -52,6 +53,7 @@ func main() {
 
 	dolthubBlogInputsDir := os.Getenv("DOLTHUB_BLOGS_DIR")
 	// dolthubEmailsInputsDir := os.Getenv("DOLTHUB_EMAILS_DIR")
+	dolthubDocsInputsDir := os.Getenv("DOLTHUB_DOCS_DIR")
 
 	var runner Runner
 	var model Model
@@ -97,10 +99,11 @@ func main() {
 	var splitter textsplitter.TextSplitter
 	var inputsDir string
 	var includeFileFunc func(path string) bool
+	var storeType DocSourceType
 
 	if *storeBlogs {
 		storeOnly = true
-
+		storeType = DocSourceTypeBlogPost
 		// todo: make this configurable
 		splitter = textsplitter.NewMarkdownTextSplitter(
 			textsplitter.WithModelName(string(model)),
@@ -123,12 +126,36 @@ func main() {
 
 	} else if *storeEmails {
 		storeOnly = true
-
+		storeType = DocSourceTypeEmail
 		panic("not implemented")
+
+	} else if *storeDocs {
+		storeOnly = true
+		storeType = DocSourceTypeDocumentation
+
+		// todo: make this configurable
+		splitter = textsplitter.NewMarkdownTextSplitter(
+			textsplitter.WithModelName(string(model)),
+			textsplitter.WithChunkSize(512),    // default is 512
+			textsplitter.WithChunkOverlap(128), // default is 100
+			textsplitter.WithCodeBlocks(true),
+			textsplitter.WithHeadingHierarchy(true),
+			textsplitter.WithCodeBlocks(true),
+		)
+
+		if _, err := os.Stat(dolthubDocsInputsDir); os.IsNotExist(err) {
+			panic("dolthub docs inputs dir does not exist")
+		}
+
+		inputsDir = dolthubDocsInputsDir
+
+		includeFileFunc = func(path string) bool {
+			return filepath.Ext(path) == ".md"
+		}
 
 	} else if *storeCustom != "" {
 		storeOnly = true
-
+		storeType = DocSourceTypeCustom
 		panic("not implemented")
 	} else {
 		splitter = NewNoopTextSplitter()
@@ -172,7 +199,7 @@ func main() {
 		*storeName,
 		splitter,
 		includeFileFunc,
-		DocSourceTypeBlogPost,
+		storeType,
 		logger,
 	)
 	if err != nil {
