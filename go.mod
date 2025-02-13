@@ -26,4 +26,4 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 )
 
-replace github.com/tmc/langchaingo => github.com/coffeegoddd/langchaingo v0.0.0-20250212220541-bbb417f6388e
+replace github.com/tmc/langchaingo => github.com/coffeegoddd/langchaingo v0.0.0-20250213003014-3cbe1e072e2e
