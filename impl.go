@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
@@ -173,6 +175,8 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			return err
 		}
 
+		// todo: put the blog tags in the metadata
+		// todo: put other useful shit in the metadata
 		md := map[string]any{
 			"doc_source_type": string(b.dst),
 			"name":            filepath.Base(file),
@@ -274,25 +278,37 @@ func (b *bloggerImpl) getNumSearchDocs(length int) int {
 func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error {
 	numSearchDocs := b.getNumSearchDocs(length)
 
-	docs, err := b.s.SimilaritySearch(ctx, userPrompt, numSearchDocs)
+	// todo: add a second retriever and merge the results
+	// Use retriever to fetch relevant documents
+	retrieverResult, err := chains.Run(
+		ctx,
+		chains.NewRetrievalQAFromLLM(
+			b.llm,
+			vectorstores.ToRetriever(
+				b.s,
+				numSearchDocs,
+			),
+		),
+		userPrompt,
+	)
 	if err != nil {
 		return err
 	}
 
-	systemPrompt := SystemPromptPreContentBlock
-	if len(docs) > 0 {
-		for _, doc := range docs {
-			systemPrompt += fmt.Sprintf("<context>%s</context>\n", doc.PageContent)
-		}
-	}
-	systemPromptEnd := fmt.Sprintf(SystemPromptPostContentBlock, topic, length, userPrompt, outputFormat)
-	systemPrompt += systemPromptEnd
+	var sb strings.Builder
+	sb.WriteString(SystemPromptPreContentBlock)
+	sb.WriteString(fmt.Sprintf("<context>%s</context>\n", retrieverResult))
+	sb.WriteString(fmt.Sprintf(SystemPromptPostContentBlock, topic, length, userPrompt, outputFormat))
+	systemPrompt := sb.String()
 
-	// TODO: maybe use the underlying llm.GenerateContent() method instead of GenerateFromSinglePrompt()
-	_, err = llms.GenerateFromSinglePrompt(
-		ctx,
-		b.llm,
-		systemPrompt,
+	msg := llms.MessageContent{
+		Role:  llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{llms.TextContent{Text: systemPrompt}},
+	}
+
+	// Generate the final content
+	_, err = b.llm.GenerateContent(ctx,
+		[]llms.MessageContent{msg},
 		llms.WithTemperature(0.8),
 		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
 			fmt.Print(string(chunk))
