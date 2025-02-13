@@ -103,6 +103,7 @@ func main() {
 
 		// todo: make this configurable
 		splitter = textsplitter.NewMarkdownTextSplitter(
+			textsplitter.WithModelName(string(model)),
 			textsplitter.WithChunkSize(512),    // default is 512
 			textsplitter.WithChunkOverlap(128), // default is 100
 			textsplitter.WithCodeBlocks(true),
