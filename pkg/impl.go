@@ -1,4 +1,4 @@
-package main
+package pkg
 
 import (
 	"bytes"
@@ -50,27 +50,16 @@ var _ Blogger = &bloggerImpl{}
 
 func NewBlogger(
 	ctx context.Context,
-	runner Runner,
-	model Model,
-	storeType StoreType,
-	host string,
-	user string,
-	password string,
-	port,
-	vectorDimensions int,
-	storeName string,
-	splitter textsplitter.TextSplitter,
-	includeFileFunc func(path string) bool,
-	dst DocSourceType,
+	config *Config,
 	logger *zap.Logger,
 ) (Blogger, error) {
 	var err error
 	var e *embeddings.EmbedderImpl
 
 	var llm llms.Model
-	switch runner {
+	switch config.Runner {
 	case OllamaRunner:
-		llm, err = ollama.New(ollama.WithModel(string(model)))
+		llm, err = ollama.New(ollama.WithModel(string(config.Model)))
 		if err != nil {
 			return nil, err
 		}
@@ -83,7 +72,7 @@ func NewBlogger(
 			return nil, err
 		}
 	case OpenAIRunner:
-		llm, err = openai.New(openai.WithModel(string(model)))
+		llm, err = openai.New(openai.WithModel(string(config.Model)))
 		if err != nil {
 			return nil, err
 		}
@@ -96,16 +85,16 @@ func NewBlogger(
 			return nil, err
 		}
 	default:
-		return nil, fmt.Errorf("unsupported llm runner: %s", runner)
+		return nil, fmt.Errorf("unsupported llm runner: %s", config.Runner)
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	var s vectorstores.VectorStore
-	switch storeType {
+	switch config.StoreType {
 	case Postgres:
-		url := getPostgresURL(user, password, host, storeName, port)
+		url := GetPostgresConnectionString(config.User, config.Password, config.Host, config.StoreName, config.Port)
 		s, err = pgvector.New(
 			ctx,
 			pgvector.WithConnectionURL(url),
@@ -115,19 +104,19 @@ func NewBlogger(
 			return nil, err
 		}
 	case Dolt:
-		url := getDoltURL(user, password, host, storeName, port)
+		url := GetDoltConnectionString(config.User, config.Password, config.Host, config.StoreName, config.Port)
 		s, err = lgdolt.New(ctx,
 			lgdolt.WithConnectionURL(url),
 			lgdolt.WithEmbedder(e),
 			lgdolt.WithCreateEmbeddingIndexAfterAddDocuments(true))
 	case MariaDB:
-		url := getMariaDBURL(user, password, host, storeName, port)
+		url := GetMariaDBConnectionString(config.User, config.Password, config.Host, config.StoreName, config.Port)
 		s, err = lgmd.New(ctx,
 			lgmd.WithConnectionURL(url),
 			lgmd.WithEmbedder(e),
-			lgmd.WithVectorDimensions(vectorDimensions))
+			lgmd.WithVectorDimensions(config.VectorDimensions))
 	default:
-		return nil, fmt.Errorf("unsupported vector store: %s", storeType)
+		return nil, fmt.Errorf("unsupported vector store: %s", config.StoreType)
 	}
 	if err != nil {
 		return nil, err
@@ -136,11 +125,11 @@ func NewBlogger(
 	return &bloggerImpl{
 		s:               s,
 		llm:             llm,
-		splitter:        splitter,
-		includeFileFunc: includeFileFunc,
-		dst:             dst,
-		runner:          runner,
-		model:           model,
+		splitter:        config.Splitter,
+		includeFileFunc: config.IncludeFileFunc,
+		dst:             config.DocSourceType,
+		runner:          config.Runner,
+		model:           config.Model,
 		logger:          logger,
 	}, nil
 }
@@ -330,21 +319,21 @@ func (b *bloggerImpl) contentMd5(data []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
-func getPostgresURL(user, password, host, databaseName string, port int) string {
+func GetPostgresConnectionString(user, password, host, databaseName string, port int) string {
 	if password == "" {
 		return fmt.Sprintf("postgres://%s@%s:%d/%s", user, host, port, databaseName)
 	}
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s", user, password, host, port, databaseName)
 }
 
-func getDoltURL(user, password, host, databaseName string, port int) string {
+func GetDoltConnectionString(user, password, host, databaseName string, port int) string {
 	if password == "" {
 		return fmt.Sprintf("%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, host, port, databaseName)
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&multiStatements=true", user, password, host, port, databaseName)
 }
 
-func getMariaDBURL(user, password, host, databaseName string, port int) string {
+func GetMariaDBConnectionString(user, password, host, databaseName string, port int) string {
 	if password == "" {
 		return fmt.Sprintf("tcp(%s:%d)/%s", host, port, databaseName)
 	}

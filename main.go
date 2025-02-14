@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/dolthub/robot-blogger/pkg"
 	"github.com/tmc/langchaingo/textsplitter"
 	"go.uber.org/zap"
 )
@@ -55,38 +56,38 @@ func main() {
 	// dolthubEmailsInputsDir := os.Getenv("DOLTHUB_EMAILS_DIR")
 	dolthubDocsInputsDir := os.Getenv("DOLTHUB_DOCS_DIR")
 
-	var runner Runner
-	var model Model
-	var sn StoreType
+	var runner pkg.Runner
+	var model pkg.Model
+	var sn pkg.StoreType
 
 	if *ollamaRunner {
-		runner = OllamaRunner
+		runner = pkg.OllamaRunner
 	} else if *openaiRunner {
 		if os.Getenv("OPENAI_API_KEY") == "" {
 			panic("OPENAI_API_KEY is required")
 		}
-		runner = OpenAIRunner
+		runner = pkg.OpenAIRunner
 	} else {
 		panic("unsupported runner")
 	}
 
 	if *llama3Model {
-		model = Llama3Model
+		model = pkg.Llama3Model
 	} else if *chatgpt4oModel {
-		model = ChatGPT4oModel
+		model = pkg.ChatGPT4oModel
 	} else {
 		panic("unsupported model")
 	}
 
 	if *postgres {
-		sn = Postgres
+		sn = pkg.Postgres
 	} else if *dolt {
-		sn = Dolt
+		sn = pkg.Dolt
 	} else if *mariadb {
 		if *vectorDimensions == 0 {
 			panic("vector dimensions are required for mariadb")
 		}
-		sn = MariaDB
+		sn = pkg.MariaDB
 	} else {
 		panic("unsupported store")
 	}
@@ -99,11 +100,11 @@ func main() {
 	var splitter textsplitter.TextSplitter
 	var inputsDir string
 	var includeFileFunc func(path string) bool
-	var storeType DocSourceType
+	var storeType pkg.DocSourceType
 
 	if *storeBlogs {
 		storeOnly = true
-		storeType = DocSourceTypeBlogPost
+		storeType = pkg.DocSourceTypeBlogPost
 		// todo: make this configurable
 		splitter = textsplitter.NewMarkdownTextSplitter(
 			textsplitter.WithModelName(string(model)),
@@ -126,12 +127,12 @@ func main() {
 
 	} else if *storeEmails {
 		storeOnly = true
-		storeType = DocSourceTypeEmail
+		storeType = pkg.DocSourceTypeEmail
 		panic("not implemented")
 
 	} else if *storeDocs {
 		storeOnly = true
-		storeType = DocSourceTypeDocumentation
+		storeType = pkg.DocSourceTypeDocumentation
 
 		// todo: make this configurable
 		splitter = textsplitter.NewMarkdownTextSplitter(
@@ -155,10 +156,10 @@ func main() {
 
 	} else if *storeCustom != "" {
 		storeOnly = true
-		storeType = DocSourceTypeCustom
+		storeType = pkg.DocSourceTypeCustom
 		panic("not implemented")
 	} else {
-		splitter = NewNoopTextSplitter()
+		splitter = pkg.NewNoopTextSplitter()
 	}
 
 	if !storeOnly {
@@ -186,20 +187,23 @@ func main() {
 		logger.Info("blogger total time", zap.Duration("duration", time.Since(start)))
 	}()
 
-	blogger, err := NewBlogger(
+	config := pkg.NewConfig()
+	config.WithRunner(runner)
+	config.WithModel(model)
+	config.WithStoreType(sn)
+	config.WithHost(*host)
+	config.WithUser(*user)
+	config.WithPassword(storePassword)
+	config.WithPort(*port)
+	config.WithVectorDimensions(*vectorDimensions)
+	config.WithStoreName(*storeName)
+	config.WithSplitter(splitter)
+	config.WithIncludeFileFunc(includeFileFunc)
+	config.WithDocSourceType(storeType)
+
+	blogger, err := pkg.NewBlogger(
 		ctx,
-		runner,
-		model,
-		sn,
-		*host,
-		*user,
-		storePassword,
-		*port,
-		*vectorDimensions,
-		*storeName,
-		splitter,
-		includeFileFunc,
-		storeType,
+		config,
 		logger,
 	)
 	if err != nil {
