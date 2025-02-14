@@ -155,6 +155,7 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			return nil
 		}
 		if b.includeFileFunc(path) {
+			b.logger.Info("preparing to store file", zap.String("file", filepath.Base(path)))
 			files = append(files, path)
 		}
 		return nil
