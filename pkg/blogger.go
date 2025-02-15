@@ -12,11 +12,6 @@ const (
 )
 
 const (
-	Llama3Model    Model = "llama3"
-	ChatGPT4oModel Model = "chatgpt-4o-latest"
-)
-
-const (
 	Postgres StoreType = "postgres"
 	MariaDB  StoreType = "mariadb"
 	Dolt     StoreType = "dolt"

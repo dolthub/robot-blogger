@@ -16,10 +16,9 @@ import (
 var help = flag.Bool("help", false, "show usage")
 var ollamaRunner = flag.Bool("ollama", false, "uses ollama llm runner")
 var openaiRunner = flag.Bool("openai", false, "uses openai llm runner")
-var llama3Model = flag.Bool("llama3", true, "uses the llama3 model for generating the content")
-var chatgpt4oModel = flag.Bool("chatgpt4o", false, "uses the chatgpt-4o-latest model for generating the content")
 var postgres = flag.Bool("postgres", false, "uses postgres as vector store")
 var dolt = flag.Bool("dolt", false, "uses dolt as vector store")
+var model = flag.String("model", "", "the LLM model to use")
 var mariadb = flag.Bool("mariadb", false, "uses mariadb as vector store")
 var prompt = flag.String("prompt", "", "the prompt to run")
 var storeBlogs = flag.Bool("store-blogs", false, "store dolthub blog documents")
@@ -49,15 +48,17 @@ func main() {
 	if *user == "" {
 		panic("user is required")
 	}
+	if *model == "" {
+		panic("model is required")
+	}
 
 	storePassword := os.Getenv("VECTOR_STORE_PASSWORD")
 
 	dolthubBlogInputsDir := os.Getenv("DOLTHUB_BLOGS_DIR")
-	// dolthubEmailsInputsDir := os.Getenv("DOLTHUB_EMAILS_DIR")
+	dolthubEmailsInputsDir := os.Getenv("DOLTHUB_EMAILS_DIR")
 	dolthubDocsInputsDir := os.Getenv("DOLTHUB_DOCS_DIR")
 
 	var runner pkg.Runner
-	var model pkg.Model
 	var sn pkg.StoreType
 
 	if *ollamaRunner {
@@ -69,14 +70,6 @@ func main() {
 		runner = pkg.OpenAIRunner
 	} else {
 		panic("unsupported runner")
-	}
-
-	if *llama3Model {
-		model = pkg.Llama3Model
-	} else if *chatgpt4oModel {
-		model = pkg.ChatGPT4oModel
-	} else {
-		panic("unsupported model")
 	}
 
 	if *postgres {
@@ -107,7 +100,7 @@ func main() {
 		storeType = pkg.DocSourceTypeBlogPost
 		// todo: make this configurable
 		splitter = textsplitter.NewMarkdownTextSplitter(
-			textsplitter.WithModelName(string(model)),
+			textsplitter.WithModelName(*model),
 			textsplitter.WithChunkSize(512),    // default is 512
 			textsplitter.WithChunkOverlap(128), // default is 100
 			textsplitter.WithCodeBlocks(true),
@@ -128,7 +121,26 @@ func main() {
 	} else if *storeEmails {
 		storeOnly = true
 		storeType = pkg.DocSourceTypeEmail
-		panic("not implemented")
+
+		// todo: make this configurable
+		splitter = textsplitter.NewMarkdownTextSplitter(
+			textsplitter.WithModelName(*model),
+			textsplitter.WithChunkSize(512),    // default is 512
+			textsplitter.WithChunkOverlap(128), // default is 100
+			textsplitter.WithCodeBlocks(true),
+			textsplitter.WithHeadingHierarchy(true),
+			textsplitter.WithCodeBlocks(true),
+		)
+
+		if _, err := os.Stat(dolthubEmailsInputsDir); os.IsNotExist(err) {
+			panic("dolthub emails inputs dir does not exist")
+		}
+
+		inputsDir = dolthubEmailsInputsDir
+
+		includeFileFunc = func(path string) bool {
+			return filepath.Ext(path) == ".md"
+		}
 
 	} else if *storeDocs {
 		storeOnly = true
@@ -136,7 +148,7 @@ func main() {
 
 		// todo: make this configurable
 		splitter = textsplitter.NewMarkdownTextSplitter(
-			textsplitter.WithModelName(string(model)),
+			textsplitter.WithModelName(*model),
 			textsplitter.WithChunkSize(512),    // default is 512
 			textsplitter.WithChunkOverlap(128), // default is 100
 			textsplitter.WithCodeBlocks(true),
@@ -189,7 +201,7 @@ func main() {
 
 	config := pkg.NewConfig()
 	config.WithRunner(runner)
-	config.WithModel(model)
+	config.WithModel(pkg.Model(*model))
 	config.WithStoreType(sn)
 	config.WithHost(*host)
 	config.WithUser(*user)
