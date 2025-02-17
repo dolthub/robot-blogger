@@ -269,6 +269,8 @@ func (b *bloggerImpl) getNumSearchDocs(length int) int {
 func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error {
 	numSearchDocs := b.getNumSearchDocs(length)
 
+	filter := map[string]any{"doc_source_type": string(b.dst)}
+
 	// todo: add a second retriever and merge the results
 	// Use retriever to fetch relevant documents
 	retrieverResult, err := chains.Run(
@@ -278,6 +280,7 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 			vectorstores.ToRetriever(
 				b.s,
 				numSearchDocs,
+				vectorstores.WithFilters(filter),
 			),
 		),
 		userPrompt,
