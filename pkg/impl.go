@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
@@ -269,29 +269,38 @@ func (b *bloggerImpl) getNumSearchDocs(length int) int {
 func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error {
 	numSearchDocs := b.getNumSearchDocs(length)
 
-	filter := map[string]any{"doc_source_type": string(b.dst)}
+	//filter := map[string]any{"doc_source_type": string(b.dst)}
 
-	// todo: add a second retriever and merge the results
-	// Use retriever to fetch relevant documents
-	retrieverResult, err := chains.Run(
-		ctx,
-		chains.NewRetrievalQAFromLLM(
-			b.llm,
-			vectorstores.ToRetriever(
-				b.s,
-				numSearchDocs,
-				vectorstores.WithFilters(filter),
-			),
-		),
-		userPrompt,
-	)
+	//// todo: add a second retriever and merge the results
+	//// Use retriever to fetch relevant documents
+	//retrieverResult, err := chains.Run(
+	//	ctx,
+	//	chains.NewRetrievalQAFromLLM(
+	//		b.llm,
+	//		vectorstores.ToRetriever(
+	//			b.s,
+	//			numSearchDocs,
+	//			//vectorstores.WithFilters(filter),
+	//		),
+	//	),
+	//	userPrompt,
+	//)
+	//if err != nil {
+	//	return err
+	//}
+
+	docs, err := b.s.SimilaritySearch(ctx, userPrompt, numSearchDocs)
 	if err != nil {
 		return err
 	}
-
+	if len(docs) == 0 {
+		return errors.New("no relevant documents found")
+	}
 	var sb strings.Builder
 	sb.WriteString(SystemPromptPreContentBlock)
-	sb.WriteString(fmt.Sprintf("<context>%s</context>\n", retrieverResult))
+	for _, doc := range docs {
+		sb.WriteString(fmt.Sprintf("<context>%s</context>\n", doc.PageContent))
+	}
 	sb.WriteString(fmt.Sprintf(SystemPromptPostContentBlock, topic, length, userPrompt, outputFormat))
 	systemPrompt := sb.String()
 

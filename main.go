@@ -172,6 +172,10 @@ func main() {
 		panic("not implemented")
 	} else {
 		splitter = pkg.NewNoopTextSplitter()
+		// currently the only thing we generate are blogs,
+		// so if we are in generate mode, we want the doc type to be blog
+		// so we retrieve blogs to send to the prompt
+		storeType = pkg.DocSourceTypeBlogPost
 	}
 
 	if !storeOnly {
