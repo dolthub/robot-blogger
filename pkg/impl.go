@@ -299,10 +299,14 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 	var sb strings.Builder
 	sb.WriteString(SystemPromptPreContentBlock)
 	for _, doc := range docs {
-		sb.WriteString(fmt.Sprintf("<context>%s</context>\n", doc.PageContent))
+		sb.WriteString(fmt.Sprintf("\n<context>\n%s\n</context>\n", doc.PageContent))
 	}
 	sb.WriteString(fmt.Sprintf(SystemPromptPostContentBlock, topic, length, userPrompt, outputFormat))
 	systemPrompt := sb.String()
+
+	fmt.Println("FINAL SYSTEM PROMPT:")
+	fmt.Println(systemPrompt)
+	fmt.Println()
 
 	msg := llms.MessageContent{
 		Role:  llms.ChatMessageTypeHuman,
