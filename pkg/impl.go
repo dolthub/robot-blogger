@@ -269,26 +269,6 @@ func (b *bloggerImpl) getNumSearchDocs(length int) int {
 func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error {
 	numSearchDocs := b.getNumSearchDocs(length)
 
-	//filter := map[string]any{"doc_source_type": string(b.dst)}
-
-	//// todo: add a second retriever and merge the results
-	//// Use retriever to fetch relevant documents
-	//retrieverResult, err := chains.Run(
-	//	ctx,
-	//	chains.NewRetrievalQAFromLLM(
-	//		b.llm,
-	//		vectorstores.ToRetriever(
-	//			b.s,
-	//			numSearchDocs,
-	//			//vectorstores.WithFilters(filter),
-	//		),
-	//	),
-	//	userPrompt,
-	//)
-	//if err != nil {
-	//	return err
-	//}
-
 	docs, err := b.s.SimilaritySearch(ctx, userPrompt, numSearchDocs)
 	if err != nil {
 		return err
