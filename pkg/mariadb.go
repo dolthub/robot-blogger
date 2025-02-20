@@ -31,7 +31,7 @@ var _ HasableVectorStore = &MariaDBHasableVectorStore{}
 func (d *MariaDBHasableVectorStore) Has(ctx context.Context, metadata map[string]any) (bool, error) {
 	whereQuerys := make([]string, 0)
 	for k, v := range metadata {
-		whereQuerys = append(whereQuerys, fmt.Sprintf("JSON_UNQUOTE(JSON_EXTRACT(data.cmetadata, '$.%s')) = '%s'", k, v))
+		whereQuerys = append(whereQuerys, fmt.Sprintf("JSON_UNQUOTE(JSON_EXTRACT(langchain_mariadb_embedding, '$.%s')) = '%s'", k, v))
 	}
 	whereQuery := strings.Join(whereQuerys, " AND ")
 	if len(whereQuery) == 0 {
