@@ -19,7 +19,6 @@ import (
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/textsplitter"
-	"github.com/tmc/langchaingo/vectorstores"
 	lgdolt "github.com/tmc/langchaingo/vectorstores/dolt"
 	lgmd "github.com/tmc/langchaingo/vectorstores/mariadb"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
@@ -38,7 +37,7 @@ const (
 type bloggerImpl struct {
 	dst             DocSourceType
 	llm             llms.Model
-	s               vectorstores.VectorStore
+	s               HasableVectorStore
 	splitter        textsplitter.TextSplitter
 	includeFileFunc func(path string) bool
 	runner          Runner
@@ -91,11 +90,11 @@ func NewBlogger(
 		return nil, err
 	}
 
-	var s vectorstores.VectorStore
+	var s HasableVectorStore
 	switch config.StoreType {
 	case Postgres:
 		url := GetPostgresConnectionString(config.User, config.Password, config.Host, config.StoreName, config.Port)
-		s, err = pgvector.New(
+		vs, err := pgvector.New(
 			ctx,
 			pgvector.WithConnectionURL(url),
 			pgvector.WithEmbedder(e),
@@ -103,23 +102,41 @@ func NewBlogger(
 		if err != nil {
 			return nil, err
 		}
+
+		s, err = NewPostgresHasableVectorStore(vs, url)
+		if err != nil {
+			return nil, err
+		}
 	case Dolt:
 		url := GetDoltConnectionString(config.User, config.Password, config.Host, config.StoreName, config.Port)
-		s, err = lgdolt.New(ctx,
+		vs, err := lgdolt.New(ctx,
 			lgdolt.WithConnectionURL(url),
 			lgdolt.WithEmbedder(e),
 			lgdolt.WithCreateEmbeddingIndexAfterAddDocuments(true))
+		if err != nil {
+			return nil, err
+		}
+
+		s, err = NewDoltHasableVectorStore(vs, url)
+		if err != nil {
+			return nil, err
+		}
 	case MariaDB:
 		url := GetMariaDBConnectionString(config.User, config.Password, config.Host, config.StoreName, config.Port)
-		s, err = lgmd.New(ctx,
+		vs, err := lgmd.New(ctx,
 			lgmd.WithConnectionURL(url),
 			lgmd.WithEmbedder(e),
 			lgmd.WithVectorDimensions(config.VectorDimensions))
+		if err != nil {
+			return nil, err
+		}
+
+		s, err = NewMariaDBHasableVectorStore(vs, url)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unsupported vector store: %s", config.StoreType)
-	}
-	if err != nil {
-		return nil, err
 	}
 
 	return &bloggerImpl{
@@ -176,8 +193,16 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			"md5":             contentHash,
 		}
 
+		has, err := b.s.Has(ctx, md)
+		if err != nil {
+			return err
+		}
+		if has {
+			b.logger.Info("document already exists", zap.String("doc_source_type", string(b.dst)), zap.String("name", filepath.Base(file)))
+			continue
+		}
+
 		// TODO: check if content has already been added
-		// TODO: if so, skip it
 
 		docs, err := textsplitter.CreateDocuments(b.splitter, []string{string(content)}, []map[string]any{md})
 		if err != nil {
@@ -313,6 +338,10 @@ func (b *bloggerImpl) contentMd5(data []byte) (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
+}
+
+func (b *bloggerImpl) Close() error {
+	return b.s.Close()
 }
 
 func GetPostgresConnectionString(user, password, host, databaseName string, port int) string {

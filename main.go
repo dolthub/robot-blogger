@@ -225,6 +225,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer blogger.Close()
 
 	if storeOnly {
 		err = blogger.Store(ctx, inputsDir)
