@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -21,18 +22,16 @@ var dolt = flag.Bool("dolt", false, "uses dolt as vector store")
 var model = flag.String("model", "", "the LLM model to use")
 var mariadb = flag.Bool("mariadb", false, "uses mariadb as vector store")
 var prompt = flag.String("prompt", "", "the prompt to run")
-var storeBlogs = flag.Bool("store-blogs", false, "store dolthub blog documents")
-var storeEmails = flag.Bool("store-emails", false, "store dolthub marketing email documents")
-var storeDocs = flag.Bool("store-docs", false, "store dolthub docs documents")
-var storeCustom = flag.String("store-custom", "", "store custom documents")
+var docType = flag.String("doc-type", "", "the type of document you are storing")
 var storeName = flag.String("store-name", "", "the name of the vector store to use")
-var host = flag.String("host", "", "the host to connect to")
-var port = flag.Int("port", 0, "the port to connect to")
-var user = flag.String("user", "", "the user of the vector store")
+var host = flag.String("host", "", "the vector store host to connect to")
+var port = flag.Int("port", 0, "the vector store port to connect to")
+var user = flag.String("user", "", "the vector store user to connect to")
 var topic = flag.String("topic", "", "the topic of the content to generate")
 var length = flag.Int("length", 500, "the length of the content to generate")
 var vectorDimensions = flag.Int("vector-dimensions", 1536, "the number of dimensions to use for the vector store")
 var outputFormat = flag.String("output-format", "markdown", "the output format of the content to generate")
+var includeFileExt = flag.String("include-file-ext", ".md", "the file extension used to filter files which should be included in the store")
 
 func main() {
 	flag.Parse()
@@ -43,20 +42,18 @@ func main() {
 	}
 
 	if *host == "" || *port == 0 {
-		panic("host and port are required")
+		printErrorUsageAndExit(errors.New("host and port are required"))
 	}
 	if *user == "" {
-		panic("user is required")
+		printErrorUsageAndExit(errors.New("user is required"))
 	}
 	if *model == "" {
-		panic("model is required")
+		printErrorUsageAndExit(errors.New("model is required"))
 	}
 
 	storePassword := os.Getenv("VECTOR_STORE_PASSWORD")
 
-	dolthubBlogInputsDir := os.Getenv("DOLTHUB_BLOGS_DIR")
-	dolthubEmailsInputsDir := os.Getenv("DOLTHUB_EMAILS_DIR")
-	dolthubDocsInputsDir := os.Getenv("DOLTHUB_DOCS_DIR")
+	docsInputsDir := os.Getenv("DOCS_DIR")
 
 	var runner pkg.Runner
 	var sn pkg.StoreType
@@ -65,11 +62,11 @@ func main() {
 		runner = pkg.OllamaRunner
 	} else if *openaiRunner {
 		if os.Getenv("OPENAI_API_KEY") == "" {
-			panic("OPENAI_API_KEY is required")
+			printErrorUsageAndExit(errors.New("OPENAI_API_KEY is required"))
 		}
 		runner = pkg.OpenAIRunner
 	} else {
-		panic("unsupported runner")
+		printErrorUsageAndExit(errors.New("unsupported runner"))
 	}
 
 	if *postgres {
@@ -78,49 +75,28 @@ func main() {
 		sn = pkg.Dolt
 	} else if *mariadb {
 		if *vectorDimensions == 0 {
-			panic("vector dimensions are required for mariadb")
+			printErrorUsageAndExit(errors.New("vector dimensions are required for mariadb"))
 		}
 		sn = pkg.MariaDB
 	} else {
-		panic("unsupported store")
+		printErrorUsageAndExit(errors.New("unsupported store"))
 	}
 
 	if *storeName == "" {
-		panic("store name is required")
+		printErrorUsageAndExit(errors.New("store name is required"))
 	}
 
 	storeOnly := false
+	var sourceType pkg.DocSourceType
 	var splitter textsplitter.TextSplitter
-	var inputsDir string
-	var includeFileFunc func(path string) bool
-	var storeType pkg.DocSourceType
 
-	if *storeBlogs {
-		storeOnly = true
-		storeType = pkg.DocSourceTypeBlogPost
-		// todo: make this configurable
-		splitter = textsplitter.NewMarkdownTextSplitter(
-			textsplitter.WithModelName(*model),
-			textsplitter.WithChunkSize(512),    // default is 512
-			textsplitter.WithChunkOverlap(128), // default is 100
-			textsplitter.WithCodeBlocks(true),
-			textsplitter.WithHeadingHierarchy(true),
-			textsplitter.WithCodeBlocks(true),
-		)
-
-		if _, err := os.Stat(dolthubBlogInputsDir); os.IsNotExist(err) {
-			panic("dolthub blog inputs dir does not exist")
+	if *docType != "" {
+		if *includeFileExt == "" {
+			printErrorUsageAndExit(errors.New("include-file-ext is required"))
 		}
 
-		inputsDir = dolthubBlogInputsDir
-
-		includeFileFunc = func(path string) bool {
-			return filepath.Ext(path) == ".md"
-		}
-
-	} else if *storeEmails {
 		storeOnly = true
-		storeType = pkg.DocSourceTypeEmail
+		sourceType = pkg.DocSourceType(*docType)
 
 		// todo: make this configurable
 		splitter = textsplitter.NewMarkdownTextSplitter(
@@ -132,58 +108,24 @@ func main() {
 			textsplitter.WithCodeBlocks(true),
 		)
 
-		if _, err := os.Stat(dolthubEmailsInputsDir); os.IsNotExist(err) {
-			panic("dolthub emails inputs dir does not exist")
-		}
-
-		inputsDir = dolthubEmailsInputsDir
-
-		includeFileFunc = func(path string) bool {
-			return filepath.Ext(path) == ".md"
-		}
-
-	} else if *storeDocs {
-		storeOnly = true
-		storeType = pkg.DocSourceTypeDocumentation
-
-		// todo: make this configurable
-		splitter = textsplitter.NewMarkdownTextSplitter(
-			textsplitter.WithModelName(*model),
-			textsplitter.WithChunkSize(512),    // default is 512
-			textsplitter.WithChunkOverlap(128), // default is 100
-			textsplitter.WithCodeBlocks(true),
-			textsplitter.WithHeadingHierarchy(true),
-			textsplitter.WithCodeBlocks(true),
-		)
-
-		if _, err := os.Stat(dolthubDocsInputsDir); os.IsNotExist(err) {
-			panic("dolthub docs inputs dir does not exist")
-		}
-
-		inputsDir = dolthubDocsInputsDir
-
-		includeFileFunc = func(path string) bool {
-			return filepath.Ext(path) == ".md"
-		}
-
-	} else if *storeCustom != "" {
-		storeOnly = true
-		storeType = pkg.DocSourceTypeCustom
-		panic("not implemented")
 	} else {
 		splitter = pkg.NewNoopTextSplitter()
-		// currently the only thing we generate are blogs,
-		// so if we are in generate mode, we want the doc type to be blog
-		// so we retrieve blogs to send to the prompt
-		storeType = pkg.DocSourceTypeBlogPost
+	}
+
+	if _, err := os.Stat(docsInputsDir); os.IsNotExist(err) {
+		printErrorUsageAndExit(errors.New("docs input dir does not exist"))
+	}
+
+	includeFileFunc := func(path string) bool {
+		return filepath.Ext(path) == *includeFileExt
 	}
 
 	if !storeOnly {
 		if *topic == "" {
-			panic("topic is required")
+			printErrorUsageAndExit(errors.New("topic is required"))
 		}
 		if *length == 0 {
-			panic("length is required")
+			printErrorUsageAndExit(errors.New("length is required"))
 		}
 	}
 
@@ -215,6 +157,8 @@ func main() {
 	config.WithStoreName(*storeName)
 	config.WithSplitter(splitter)
 	config.WithIncludeFileFunc(includeFileFunc)
+	config.WithPreContentSystemPrompt(SystemPromptPreContentBlock)
+	config.WithPostContentSystemPrompt(SystemPromptPostContentBlock)
 
 	blogger, err := pkg.NewBlogger(
 		ctx,
@@ -222,21 +166,27 @@ func main() {
 		logger,
 	)
 	if err != nil {
-		panic(err)
+		printErrorUsageAndExit(err)
 	}
 	defer blogger.Close()
 
 	if storeOnly {
-		err = blogger.Store(ctx, storeType, inputsDir)
+		err = blogger.Store(ctx, sourceType, docsInputsDir)
 	} else {
 		err = blogger.Generate(ctx, *prompt, *topic, *length, *outputFormat)
 	}
 	if err != nil {
-		panic(err)
+		printErrorUsageAndExit(err)
 	}
 }
 
 func Usage() {
 	fmt.Println("robot-blogger [options]")
 	flag.PrintDefaults()
+}
+
+func printErrorUsageAndExit(err error) {
+	fmt.Println(err)
+	Usage()
+	os.Exit(1)
 }

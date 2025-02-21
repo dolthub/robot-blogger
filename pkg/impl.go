@@ -27,21 +27,16 @@ import (
 
 type DocSourceType string
 
-const (
-	DocSourceTypeBlogPost      DocSourceType = "blog_post"
-	DocSourceTypeEmail         DocSourceType = "email"
-	DocSourceTypeDocumentation DocSourceType = "documentation"
-	DocSourceTypeCustom        DocSourceType = "custom"
-)
-
 type bloggerImpl struct {
-	llm             llms.Model
-	s               HasableVectorStore
-	splitter        textsplitter.TextSplitter
-	includeFileFunc func(path string) bool
-	runner          Runner
-	model           Model
-	logger          *zap.Logger
+	llm                     llms.Model
+	s                       HasableVectorStore
+	splitter                textsplitter.TextSplitter
+	includeFileFunc         func(path string) bool
+	runner                  Runner
+	model                   Model
+	logger                  *zap.Logger
+	preContentSystemPrompt  string
+	postContentSystemPrompt string
 }
 
 var _ Blogger = &bloggerImpl{}
@@ -139,13 +134,15 @@ func NewBlogger(
 	}
 
 	return &bloggerImpl{
-		s:               s,
-		llm:             llm,
-		splitter:        config.Splitter,
-		includeFileFunc: config.IncludeFileFunc,
-		runner:          config.Runner,
-		model:           config.Model,
-		logger:          logger,
+		s:                       s,
+		llm:                     llm,
+		splitter:                config.Splitter,
+		includeFileFunc:         config.IncludeFileFunc,
+		runner:                  config.Runner,
+		model:                   config.Model,
+		logger:                  logger,
+		preContentSystemPrompt:  config.PreContentSystemPrompt,
+		postContentSystemPrompt: config.PostContentSystemPrompt,
 	}, nil
 }
 
@@ -181,8 +178,6 @@ func (b *bloggerImpl) Store(ctx context.Context, docSourceType DocSourceType, di
 			return err
 		}
 
-		// todo: put the blog tags in the metadata
-		// todo: put other useful shit in the metadata
 		md := map[string]any{
 			"doc_source_type": string(docSourceType),
 			"name":            filepath.Base(file),
@@ -200,8 +195,6 @@ func (b *bloggerImpl) Store(ctx context.Context, docSourceType DocSourceType, di
 			continue
 		}
 
-		// TODO: check if content has already been added
-
 		docs, err := textsplitter.CreateDocuments(b.splitter, []string{string(content)}, []map[string]any{md})
 		if err != nil {
 			return err
@@ -218,61 +211,6 @@ func (b *bloggerImpl) Store(ctx context.Context, docSourceType DocSourceType, di
 
 	return nil
 }
-
-var SystemPromptPreContentBlock = `
-You are an expert content writer specializing in technical writing and marketing writing about Dolt, DoltHub and its related products.
-Use the provided context document(s) to write new content based on the user's prompt.
-You should write in a style that is engaging and informative, and to the point.
-You should not copy the context verbatim, but rather use it as a guide to write new, engaging content.
-Be sure to introduce new perspectives and ideas. Also, try to match the company's style and voice.
-Each context document will be indicated by the following start and end tags:
-
-<context>
-</context>
-
-The user prompt will be indicated by the following start and end tags:
-
-<user_prompt>
-</user_prompt>
-
-The topic of your content will be indicated by the following start and end tags:
-
-<topic>
-</topic>
-
-The length of your content will be indicated by the following start and end tags:
-
-<length>
-</length>
-
-The output format of your content will be indicated by the following start and end tags:
-
-<output_format>
-</output_format>
-
-Here are the context documents:
-
-`
-
-var SystemPromptPostContentBlock = `
-Here are the topic, length, user's prompt, and output format:
-
-<topic>
-%s
-</topic>
-
-<length>
-%d
-</length>
-
-<user_prompt>
-%s
-</user_prompt>
-
-<output_format>
-%s
-</output_format>
-`
 
 func (b *bloggerImpl) getNumSearchDocs(length int) int {
 	if length < 300 {
@@ -300,13 +238,17 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 		return errors.New("no relevant documents found")
 	}
 	var sb strings.Builder
-	sb.WriteString(SystemPromptPreContentBlock)
+	sb.WriteString(b.preContentSystemPrompt)
 	for _, doc := range docs {
+		fmt.Println()
+		fmt.Println("DOC SIM SCORE: ", doc.Score)
+		fmt.Println()
 		sb.WriteString(fmt.Sprintf("\n<context>\n%s\n</context>\n", doc.PageContent))
 	}
-	sb.WriteString(fmt.Sprintf(SystemPromptPostContentBlock, topic, length, userPrompt, outputFormat))
+	sb.WriteString(fmt.Sprintf(b.postContentSystemPrompt, topic, length, userPrompt, outputFormat))
 	systemPrompt := sb.String()
 
+	fmt.Println()
 	fmt.Println("FINAL SYSTEM PROMPT:")
 	fmt.Println(systemPrompt)
 	fmt.Println()
@@ -316,7 +258,6 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 		Parts: []llms.ContentPart{llms.TextContent{Text: systemPrompt}},
 	}
 
-	// Generate the final content
 	_, err = b.llm.GenerateContent(ctx,
 		[]llms.MessageContent{msg},
 		llms.WithTemperature(0.8),

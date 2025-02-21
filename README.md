@@ -12,11 +12,47 @@ a RAG AI blog/email writer with Dolt as an optional vector store.
 # Installation
 
 ```bash
-cd robot-blogger/go/cmd
+cd robot-blogger
 go install .
 ```
 
-# Example
+## Required Flags
+
+**Required Flags**
+
+- `-host`, the vector store host to connect to.
+- `-port`, the vector store port to connect to.
+- `-user`, the vector store user to connect to.
+- `-model`, the LLM model to use.
+- `-store-name`, the name of the vector store to use.
+
+One of:
+
+- `-dolt`, uses dolt as vector store.
+- `-mariadb`, uses mariadb as vector store.
+- `-postgres`, uses postgres as vector store.
+
+One of:
+
+- `-ollama`, uses ollama llm runner. `OLLAMA_HOST` environment variable must be set if not running on localhost.
+- `-openai`, uses openai llm runner. `OPENAI_API_KEY` environment variable must be set.
+
+**Required for Store**
+
+- `DOCS_DIR` environment variable must be set. Specifies path to directory containing the docs to store.
+- `-doc-type`, the type of document you are storing.
+- `-include-file-ext`, the file extension of the docs to store.
+
+**Required for Generate**
+
+- `-prompt`, the prompt to run.
+- `-topic`, the topic of the content to generate.
+- `-length`, the length of the content to generate.
+
+**Optional Flags**
+
+- `-output-format`, the format of the content to generate.
+- `-vector-dimensions`, the number of dimensions to use for the vector store. Required for MariaDB.
 
 You must have a vector store running with the store name/database name already created. You may also need to pull the model
 you are trying to use, ie:
@@ -27,36 +63,30 @@ ollama pull llama3
 
 ## Store
 
-To Store Content for later RAG use include the `--store-blogs`, `--store-emails`, or `--store-custom` options with the other required flags.
-
-`--store-blogs` requires `DOLTHUB_BLOGS_DIR` environment variable to be set.
-`--store-emails` requires `DOLTHUB_EMAILS_DIR` environment variable to be set.
-
 ```bash
 export VECTOR_STORE_PASSWORD=mydbpass
-export DOLTHUB_BLOGS_DIR=/path/to/dolthub/blogs
+export DOCS_DIR=/path/to/docs
 
 ./robot-blogger \
 --ollama \
---llama3 \
+--model=llama3 \
 --dolt \
 --user=root \
 --host=0.0.0.0 \
 --port=3306 \
 --store-name=robot_blogger_llama3_v1 \
---store-blogs
+--doc-type=blog_post \
+--include-file-ext=".md"
 ```
 
 ## Generate
-
-To Generate RAG Content include the `--prompt` option with the other required flags.
 
 ```bash
 export VECTOR_STORE_PASSWORD=mydbpass
 
 ./robot-blogger \
 --ollama \
---llama3 \
+--model=llama3 \
 --dolt \
 --user=root \
 --host=0.0.0.0 \
@@ -64,9 +94,3 @@ export VECTOR_STORE_PASSWORD=mydbpass
 --store-name=robot_blogger_llama3_v1 \
 --prompt="What are Dolt and DoltHub?"
 ```
-
-
-# TODO
-
-* Add reranking via BM25 + embedding rerankings.
-
