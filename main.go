@@ -215,7 +215,6 @@ func main() {
 	config.WithStoreName(*storeName)
 	config.WithSplitter(splitter)
 	config.WithIncludeFileFunc(includeFileFunc)
-	config.WithDocSourceType(storeType)
 
 	blogger, err := pkg.NewBlogger(
 		ctx,
@@ -228,7 +227,7 @@ func main() {
 	defer blogger.Close()
 
 	if storeOnly {
-		err = blogger.Store(ctx, inputsDir)
+		err = blogger.Store(ctx, storeType, inputsDir)
 	} else {
 		err = blogger.Generate(ctx, *prompt, *topic, *length, *outputFormat)
 	}
