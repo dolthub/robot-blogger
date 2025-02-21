@@ -35,7 +35,6 @@ const (
 )
 
 type bloggerImpl struct {
-	dst             DocSourceType
 	llm             llms.Model
 	s               HasableVectorStore
 	splitter        textsplitter.TextSplitter
@@ -144,14 +143,13 @@ func NewBlogger(
 		llm:             llm,
 		splitter:        config.Splitter,
 		includeFileFunc: config.IncludeFileFunc,
-		dst:             config.DocSourceType,
 		runner:          config.Runner,
 		model:           config.Model,
 		logger:          logger,
 	}, nil
 }
 
-func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
+func (b *bloggerImpl) Store(ctx context.Context, docSourceType DocSourceType, dir string) error {
 	files := make([]string, 0)
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
@@ -186,7 +184,7 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 		// todo: put the blog tags in the metadata
 		// todo: put other useful shit in the metadata
 		md := map[string]any{
-			"doc_source_type": string(b.dst),
+			"doc_source_type": string(docSourceType),
 			"name":            filepath.Base(file),
 			"runner":          string(b.runner),
 			"model":           string(b.model),
@@ -198,7 +196,7 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			return err
 		}
 		if has {
-			b.logger.Info("document already exists", zap.String("doc_source_type", string(b.dst)), zap.String("name", filepath.Base(file)))
+			b.logger.Info("document already exists", zap.String("doc_source_type", string(docSourceType)), zap.String("name", filepath.Base(file)))
 			continue
 		}
 
@@ -215,7 +213,7 @@ func (b *bloggerImpl) Store(ctx context.Context, dir string) error {
 			return err
 		}
 
-		b.logger.Info("finished storing document", zap.String("doc_source_type", string(b.dst)), zap.String("name", filepath.Base(file)), zap.Duration("duration", time.Since(start)))
+		b.logger.Info("finished storing document", zap.String("doc_source_type", string(docSourceType)), zap.String("name", filepath.Base(file)), zap.Duration("duration", time.Since(start)))
 	}
 
 	return nil

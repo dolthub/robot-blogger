@@ -14,7 +14,6 @@ type Config struct {
 	StoreName        string
 	Splitter         textsplitter.TextSplitter
 	IncludeFileFunc  func(path string) bool
-	DocSourceType    DocSourceType
 }
 
 func NewConfig() *Config {
@@ -73,10 +72,5 @@ func (c *Config) WithSplitter(splitter textsplitter.TextSplitter) *Config {
 
 func (c *Config) WithIncludeFileFunc(includeFileFunc func(path string) bool) *Config {
 	c.IncludeFileFunc = includeFileFunc
-	return c
-}
-
-func (c *Config) WithDocSourceType(docSourceType DocSourceType) *Config {
-	c.DocSourceType = docSourceType
 	return c
 }

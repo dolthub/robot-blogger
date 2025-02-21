@@ -18,7 +18,7 @@ const (
 )
 
 type Blogger interface {
-	Store(ctx context.Context, dir string) error
+	Store(ctx context.Context, docSourceType DocSourceType, dir string) error
 	Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error
 	Close() error
 }
