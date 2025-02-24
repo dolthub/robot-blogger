@@ -91,6 +91,8 @@ export VECTOR_STORE_PASSWORD=mydbpass
 --user=root \
 --host=0.0.0.0 \
 --port=3306 \
+--topic="DoltHub Products" \
+--length=100 \
 --store-name=robot_blogger_llama3_v1 \
 --prompt="What are Dolt and DoltHub?"
 ```

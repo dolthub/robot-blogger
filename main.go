@@ -166,7 +166,7 @@ func main() {
 		logger,
 	)
 	if err != nil {
-		printErrorUsageAndExit(err)
+		printErrorAndExit(err)
 	}
 	defer blogger.Close()
 
@@ -176,13 +176,18 @@ func main() {
 		err = blogger.Generate(ctx, *prompt, *topic, *length, *outputFormat)
 	}
 	if err != nil {
-		printErrorUsageAndExit(err)
+		printErrorAndExit(err)
 	}
 }
 
 func Usage() {
 	fmt.Println("robot-blogger [options]")
 	flag.PrintDefaults()
+}
+
+func printErrorAndExit(err error) {
+	fmt.Println(err)
+	os.Exit(1)
 }
 
 func printErrorUsageAndExit(err error) {
