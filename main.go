@@ -112,10 +112,6 @@ func main() {
 		splitter = pkg.NewNoopTextSplitter()
 	}
 
-	if _, err := os.Stat(docsInputsDir); os.IsNotExist(err) {
-		printErrorUsageAndExit(errors.New("docs input dir does not exist"))
-	}
-
 	includeFileFunc := func(path string) bool {
 		return filepath.Ext(path) == *includeFileExt
 	}
@@ -126,6 +122,10 @@ func main() {
 		}
 		if *length == 0 {
 			printErrorUsageAndExit(errors.New("length is required"))
+		}
+	} else {
+		if _, err := os.Stat(docsInputsDir); os.IsNotExist(err) {
+			printErrorUsageAndExit(errors.New("docs input dir does not exist"))
 		}
 	}
 
