@@ -73,20 +73,35 @@ class FileIngestor:
         metadata = {}
 
         # Look for front matter enclosed by "---\n ... ---\n"
-        match = re.match(r"^---\n(.*?)\n---\n", content_markdown, re.DOTALL)
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content_markdown, re.DOTALL)
         if match:
             front_matter = match.group(1)
 
             # Extract "tags" field if present
-            tags_match = re.search(r'^"tags":\s*(\[.*?\])', front_matter, re.MULTILINE)
-            if tags_match:
+            tags = self.extract_tags(front_matter)
+            if tags:
+                metadata["tags"] = tags
+        return metadata
+
+    def extract_tags(self, front_matter):
+        """Extracts the 'tags' field from YAML front matter."""
+        tags_match = re.search(r'^tags:\s*(\[.*?\]|".*?"|\S+)', front_matter, re.MULTILINE)
+        if tags_match:
+            raw_tags = tags_match.group(1).strip()
+
+            # Try parsing JSON list if it matches a JSON format
+            if raw_tags.startswith("["):
                 try:
-                    tags = json.loads(tags_match.group(1))  # Parse tags as JSON array
-                    metadata["tags"] = tags
+                    tags = json.loads(raw_tags)  # Parse JSON array
                 except json.JSONDecodeError:
                     print("⚠️ Warning: Failed to parse tags as JSON.")
+                    tags = [raw_tags]
+            else:
+                # Remove quotes if present
+                tags = [raw_tags.strip('"')]
 
-        return metadata
+            return tags
+        return None  # No tags found
 
     def insert_into_db(self, file_path):
         """Reads a file and inserts its contents into the MySQL table."""
@@ -108,9 +123,8 @@ class FileIngestor:
             metadata = {
                 "file_name": Path(file_path).name,  # Just the base file name
                 "size_bytes": os.path.getsize(file_path),
-                "created_at": os.path.getctime(file_path),
-                "updated_at": os.path.getmtime(file_path),
-                "md5_hash": md5_hash  # ✅ Store MD5 hash in metadata
+                "md5_hash": md5_hash,  # ✅ Store MD5 hash in metadata
+                "doc_type": self.doc_type
             }
 
             # If the doc type is "blog_post", extract additional metadata
