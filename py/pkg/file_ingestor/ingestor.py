@@ -3,6 +3,7 @@ import json
 import uuid
 import re
 import hashlib
+import sys
 import mysql.connector
 import markdown
 from bs4 import BeautifulSoup
@@ -28,11 +29,11 @@ class FileIngestor:
         """Ensures the expected table schema is created in the MySQL database."""
         create_table_query = """
         CREATE TABLE IF NOT EXISTS human_blogs (
-            id VARCHAR(36) NOT NULL PRIMARY KEY,
-            file_name VARCHAR(2048) NOT NULL UNIQUE,
+            md5_hash VARCHAR(32) NOT NULL PRIMARY KEY,
+            file_name VARCHAR(255) NOT NULL UNIQUE,
             metadata JSON,
-            file_content_markdown TEXT NOT NULL,
-            file_content_plain TEXT NOT NULL,
+            file_content_markdown LONGTEXT NOT NULL,
+            file_content_plain LONGTEXT NOT NULL,
             word_count INT NOT NULL
         );
         """
@@ -109,6 +110,19 @@ class FileIngestor:
             with open(file_path, "r", encoding="utf-8") as f:
                 content_markdown = f.read()
 
+                # # Fix escape sequences
+                # content_markdown = content_markdown.replace("\\", "\\\\")
+
+                # # Replace "mysql>" at the start of a line with "sql prompt:"
+                # content_markdown = re.sub(r"^mysql>\s*", "sql prompt: ", content_markdown, flags=re.MULTILINE)
+
+                start = 1388
+                end = 1500
+
+                # content_markdown = content_markdown[0:end]
+
+
+
             # Compute MD5 hash of markdown content
             md5_hash = self.compute_md5(content_markdown)
 
@@ -116,14 +130,14 @@ class FileIngestor:
             content_plain = self.markdown_to_plaintext(content_markdown)
             word_count = len(content_plain.split())
 
-            # Generate a unique ID
-            file_id = str(uuid.uuid4())
+            # # Generate a unique ID
+            # file_id = str(uuid.uuid4())
 
             # Base metadata
             metadata = {
                 "file_name": Path(file_path).name,  # Just the base file name
                 "size_bytes": os.path.getsize(file_path),
-                "md5_hash": md5_hash,  # ✅ Store MD5 hash in metadata
+                # "md5_hash": md5_hash,  # ✅ Store MD5 hash in metadata
                 "doc_type": self.doc_type
             }
 
@@ -140,19 +154,18 @@ class FileIngestor:
             metadata_json = json.dumps(metadata)
 
             connection = mysql.connector.connect(**self.db_config)
+
             cursor = connection.cursor()
 
             insert_query = """
-            INSERT INTO human_blogs (id, file_name, metadata, file_content_markdown, file_content_plain, word_count)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                metadata = VALUES(metadata),
-                file_content_markdown = VALUES(file_content_markdown),
-                file_content_plain = VALUES(file_content_plain),
-                word_count = VALUES(word_count);
+            INSERT INTO human_blogs (md5_hash, file_name, metadata, file_content_markdown, file_content_plain, word_count)
+            VALUES (%s, %s, %s, %s, %s, %s);
             """
 
-            cursor.execute(insert_query, (file_id, Path(file_path).name, metadata_json, content_markdown, content_plain, word_count))
+            # content_markdown = content_markdown[0:start]
+            # content_plain = content_plain[0:start]
+
+            cursor.execute(insert_query, (md5_hash, Path(file_path).name, metadata_json, content_markdown, content_plain, word_count))
             
             connection.commit()
             cursor.close()
@@ -162,6 +175,17 @@ class FileIngestor:
 
         except Exception as e:
             print(f"❌ Error processing {file_path}: {e}")
+            print(f"❌ Content Markdown: {repr(content_markdown)}")
+            print()
+            print(f"❌ Content Plain: {repr(content_plain)}")
+            # print(f"🔍 Problematic snippet [{start}:{end}]:")
+            # print(f"Last 6 characters markdown: {content_markdown[-6:start]}")
+            # print(f"Last 6 characters plain: {content_plain[-6:start]}")
+            self.panic(f"STOPPING: {file_path}: {e}")
+
+    def panic(message):
+        print(f"❌ PANIC: {message}", file=sys.stderr)
+        sys.exit(1)  # Exit with failure
 
     def run(self):
         """Main function to process files and insert into MySQL."""
