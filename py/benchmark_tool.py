@@ -3,7 +3,8 @@
 import argparse
 import sys
 from pkg.file_ingestor.ingestor import FileIngestor
-from pkg.file_ingestor.config import DB_CONFIG
+from pkg.config.config import DB_CONFIG
+from pkg.prompt_generator.generator import fetch_all_blog_ids, fetch_blog_by_id, generate_blog_prompt
 
 
 # Define a filter function (e.g., only `.md` files)
@@ -30,30 +31,67 @@ def run_ingestor(directory, doc_type):
     ingestor.run()
 
 
+def run_prompt_generator(limit=None):
+    """Runs the prompt generator to reverse-engineer prompts from human-written blogs."""
+    blog_ids = fetch_all_blog_ids()
+
+    if not blog_ids:
+        print("❌ No blogs found in the database.")
+        return
+
+    if limit:
+        blog_ids = blog_ids[:limit]
+
+    for blog_id in blog_ids:
+        blog = fetch_blog_by_id(blog_id)  # Fetch a single blog at a time
+        if blog:
+            generate_blog_prompt(blog)
+        else:
+            print(f"⚠️ Skipping blog ID {blog_id}, not found.")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="File Ingestor CLI")
+    parser = argparse.ArgumentParser(description="Benchmark Tool CLI")
 
-    # Add 'ingest' as a positional command
-    parser.add_argument("command", choices=["ingest"], help="Command to execute")
+    # Define available subcommands
+    parser.add_argument(
+        "command",
+        choices=["ingest", "generate-prompt"],
+        help="Command to execute"
+    )
 
-    # Add required arguments for 'ingest'
+    # Arguments for 'ingest' command
     parser.add_argument(
         "--dir",
         type=str,
-        required=True,
-        help="Directory to ingest files from (required)",
+        required=False,
+        help="Directory to ingest files from (required for ingest)",
     )
     parser.add_argument(
         "--doc-type",
         type=str,
-        required=True,
-        help="Type of document to process (required)",
+        required=False,
+        help="Type of document to process (required for ingest)",
+    )
+
+    # Arguments for 'generate-prompt' command
+    parser.add_argument(
+        "--limit",
+        type=int,
+        required=False,
+        help="Limit the number of blog prompts generated (optional)"
     )
 
     args = parser.parse_args()
 
     if args.command == "ingest":
+        if not args.dir or not args.doc_type:
+            print("❌ Error: --dir and --doc-type are required for 'ingest'.", file=sys.stderr)
+            sys.exit(1)
         run_ingestor(args.dir, args.doc_type)
+
+    elif args.command == "generate-prompt":
+        run_prompt_generator(args.limit)
 
 
 if __name__ == "__main__":
