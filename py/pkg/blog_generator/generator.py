@@ -1,7 +1,9 @@
 import os
 import uuid
 import hashlib
-import openai
+from openai import OpenAI
+
+client = OpenAI()
 import mysql.connector
 import markdown
 from bs4 import BeautifulSoup
@@ -79,10 +81,16 @@ def markdown_to_plaintext(markdown_content):
 
 
 def generate_blog_content(prompt_text, model_name="gpt-4"):
-    """Generates blog content in markdown format using OpenAI."""
+    """Generates blog content in markdown format using OpenAI with streaming."""
     print(f"🚀 Generating blog using model {model_name}...")
 
-    response = openai.ChatCompletion.create(
+    # Ensure prompt_text is a string
+    if not isinstance(prompt_text, str):
+        print(f"⚠️ Warning: prompt_text is not a string. Converting to string. Type: {type(prompt_text)}")
+        prompt_text = str(prompt_text)
+
+    # Call OpenAI API with streaming enabled
+    response = client.chat.completions.create(
         model=model_name,
         messages=[
             {
@@ -92,15 +100,31 @@ def generate_blog_content(prompt_text, model_name="gpt-4"):
             {"role": "user", "content": prompt_text},
         ],
         temperature=0.7,
+        stream=True  # Enable streaming
     )
 
-    markdown_content = response["choices"][0]["message"]["content"]
-    plain_text_content = markdown_to_plaintext(
-        markdown_content
-    )  # Convert Markdown to Plaintext
+    # Initialize empty strings to store the response
+    markdown_content = ""
+    
+    print("📡 Streaming response from LLM...")
+    
+    for chunk in response:
+        if chunk.choices:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                markdown_content += delta.content
+                print(delta.content, end="", flush=True)  # Stream to console in real-time
+    
+    print("\n✅ Finished streaming response.")
+
+    # Convert markdown to plaintext
+    plain_text_content = markdown_to_plaintext(markdown_content)
+
+    # Generate MD5 hash
     md5_hash = generate_md5_hash(markdown_content)
 
     return markdown_content, plain_text_content, md5_hash
+
 
 
 def store_generated_blog(

@@ -18,9 +18,11 @@ from pkg.blog_generator.generator import (
     store_generated_blog,
 )
 
+
 # Define a filter function (e.g., only `.md` files)
 def filter_markdown_files(filename):
     return filename.endswith(".md")
+
 
 def run_ingestor(directory, doc_type):
     """Runs the file ingestor with the specified directory and document type."""
@@ -90,7 +92,9 @@ def main():
 
     # Define available subcommands
     parser.add_argument(
-        "command", choices=["ingest", "generate-prompt"], help="Command to execute"
+        "command",
+        choices=["ingest", "generate-prompt", "generate-blog"],
+        help="Command to execute",
     )
 
     # Arguments for 'ingest' command
