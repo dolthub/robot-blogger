@@ -1,13 +1,12 @@
 import os
 import json
-import uuid
 import re
 import hashlib
-import sys
 import mysql.connector
 import markdown
 from bs4 import BeautifulSoup
 from pathlib import Path
+
 
 class FileIngestor:
     def __init__(self, db_config, directory, filter_func, doc_type=None):
@@ -51,7 +50,11 @@ class FileIngestor:
 
     def get_sorted_files(self):
         """Collects and sorts files lexicographically based on filter criteria."""
-        files = [os.path.join(self.directory, f) for f in os.listdir(self.directory) if self.filter_func(f)]
+        files = [
+            os.path.join(self.directory, f)
+            for f in os.listdir(self.directory)
+            if self.filter_func(f)
+        ]
         return sorted(files)  # Lexicographic sorting
 
     def markdown_to_plaintext(self, markdown_content):
@@ -62,7 +65,7 @@ class FileIngestor:
 
     def compute_md5(self, content):
         """Computes the MD5 hash of the given content."""
-        return hashlib.md5(content.encode('utf-8')).hexdigest()
+        return hashlib.md5(content.encode("utf-8")).hexdigest()
 
     def extract_metadata_from_blog(self, content_markdown):
         """
@@ -86,7 +89,9 @@ class FileIngestor:
 
     def extract_tags(self, front_matter):
         """Extracts the 'tags' field from YAML front matter."""
-        tags_match = re.search(r'^tags:\s*(\[.*?\]|".*?"|\S+)', front_matter, re.MULTILINE)
+        tags_match = re.search(
+            r'^tags:\s*(\[.*?\]|".*?"|\S+)', front_matter, re.MULTILINE
+        )
         if tags_match:
             raw_tags = tags_match.group(1).strip()
 
@@ -110,19 +115,6 @@ class FileIngestor:
             with open(file_path, "r", encoding="utf-8") as f:
                 content_markdown = f.read()
 
-                # # Fix escape sequences
-                # content_markdown = content_markdown.replace("\\", "\\\\")
-
-                # # Replace "mysql>" at the start of a line with "sql prompt:"
-                # content_markdown = re.sub(r"^mysql>\s*", "sql prompt: ", content_markdown, flags=re.MULTILINE)
-
-                start = 1388
-                end = 1500
-
-                # content_markdown = content_markdown[0:end]
-
-
-
             # Compute MD5 hash of markdown content
             md5_hash = self.compute_md5(content_markdown)
 
@@ -130,15 +122,11 @@ class FileIngestor:
             content_plain = self.markdown_to_plaintext(content_markdown)
             word_count = len(content_plain.split())
 
-            # # Generate a unique ID
-            # file_id = str(uuid.uuid4())
-
             # Base metadata
             metadata = {
                 "file_name": Path(file_path).name,  # Just the base file name
                 "size_bytes": os.path.getsize(file_path),
-                # "md5_hash": md5_hash,  # ✅ Store MD5 hash in metadata
-                "doc_type": self.doc_type
+                "doc_type": self.doc_type,
             }
 
             # If the doc type is "blog_post", extract additional metadata
@@ -162,11 +150,18 @@ class FileIngestor:
             VALUES (%s, %s, %s, %s, %s, %s);
             """
 
-            # content_markdown = content_markdown[0:start]
-            # content_plain = content_plain[0:start]
+            cursor.execute(
+                insert_query,
+                (
+                    md5_hash,
+                    Path(file_path).name,
+                    metadata_json,
+                    content_markdown,
+                    content_plain,
+                    word_count,
+                ),
+            )
 
-            cursor.execute(insert_query, (md5_hash, Path(file_path).name, metadata_json, content_markdown, content_plain, word_count))
-            
             connection.commit()
             cursor.close()
             connection.close()
@@ -175,17 +170,6 @@ class FileIngestor:
 
         except Exception as e:
             print(f"❌ Error processing {file_path}: {e}")
-            print(f"❌ Content Markdown: {repr(content_markdown)}")
-            print()
-            print(f"❌ Content Plain: {repr(content_plain)}")
-            # print(f"🔍 Problematic snippet [{start}:{end}]:")
-            # print(f"Last 6 characters markdown: {content_markdown[-6:start]}")
-            # print(f"Last 6 characters plain: {content_plain[-6:start]}")
-            self.panic(f"STOPPING: {file_path}: {e}")
-
-    def panic(message):
-        print(f"❌ PANIC: {message}", file=sys.stderr)
-        sys.exit(1)  # Exit with failure
 
     def run(self):
         """Main function to process files and insert into MySQL."""
