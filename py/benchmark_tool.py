@@ -31,7 +31,7 @@ def run_ingestor(directory, doc_type):
     ingestor.run()
 
 
-def run_prompt_generator(limit=None):
+def run_prompt_generator(limit=None, model=None):
     """Runs the prompt generator to reverse-engineer prompts from human-written blogs."""
     blog_ids = fetch_all_blog_ids()
 
@@ -45,7 +45,7 @@ def run_prompt_generator(limit=None):
     for blog_id in blog_ids:
         blog = fetch_blog_by_id(blog_id)  # Fetch a single blog at a time
         if blog:
-            generate_blog_prompt(blog)
+            generate_blog_prompt(blog, model)
         else:
             print(f"⚠️ Skipping blog ID {blog_id}, not found.")
 
@@ -82,6 +82,12 @@ def main():
         help="Limit the number of blog prompts generated (optional)"
     )
 
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        help="Model to use for prompt generation (optional)"
+    ) 
     args = parser.parse_args()
 
     if args.command == "ingest":
@@ -91,7 +97,7 @@ def main():
         run_ingestor(args.dir, args.doc_type)
 
     elif args.command == "generate-prompt":
-        run_prompt_generator(args.limit)
+        run_prompt_generator(args.limit, args.model)
 
 
 if __name__ == "__main__":

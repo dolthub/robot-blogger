@@ -1,11 +1,33 @@
-import os
+import uuid
 import openai
 import mysql.connector
 from pkg.config.config import DB_CONFIG, OPENAI_API_KEY
-from pkg.prompt_generator.prompts import generate_prompt
+from pkg.prompt_generator.prompts import generate_reverse_prompt
 
-# Directory to store generated blogs
-OUTPUT_DIR = "generated_blogs"
+# Ensure this matches the table name in Dolt
+TABLE_NAME = "prompts"
+
+def create_prompts_table():
+    """Creates the prompts table if it does not exist."""
+    connection = mysql.connector.connect(**DB_CONFIG)
+    cursor = connection.cursor()
+
+    create_table_query = f"""
+    CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+        id VARCHAR(36) NOT NULL PRIMARY KEY,
+        blog_id VARCHAR(36) NOT NULL,
+        generated_prompt TEXT NOT NULL,
+        model_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (blog_id) REFERENCES human_blogs(id) ON DELETE CASCADE
+    );
+    """
+    
+    cursor.execute(create_table_query)
+    connection.commit()
+    cursor.close()
+    connection.close()
+    print("✅ Ensured prompts table exists.")
 
 def fetch_all_blog_ids():
     """Fetch only blog IDs from the human_blogs table."""
@@ -33,47 +55,43 @@ def fetch_blog_by_id(blog_id):
 
     return blog
 
-def generate_prompt(blog):
-    """Generates blog prompt using OpenAI and saves it to a file."""
-    # blog_id = blog["id"]
-    file_name = blog["file_name"].replace(".md", "_ai.md")  # Change file name
+def store_generated_prompt(blog_id, prompt, model_name):
+    """Stores the generated prompt in the database with model information."""
+    connection = mysql.connector.connect(**DB_CONFIG)
+    cursor = connection.cursor()
+
+    prompt_id = str(uuid.uuid4())  # Generate unique ID
+    insert_query = f"""
+    INSERT INTO {TABLE_NAME} (id, blog_id, generated_prompt, model_name)
+    VALUES (%s, %s, %s, %s)
+    """
+    cursor.execute(insert_query, (prompt_id, blog_id, prompt, model_name))
+
+    connection.commit()
+    cursor.close()
+    connection.close()
+    print(f"✅ Stored prompt for blog ID {blog_id} in database (Model: {model_name}).")
+
+def generate_blog_prompt(blog, model_name):
+    """Generates a blog-writing prompt from a human-written blog and stores it in DB."""
+    blog_id = blog["id"]
+    file_name = blog["file_name"].replace(".md", "_prompt.txt")
     content = blog["file_content_plain"]
-    prompt = generate_prompt(file_name, content)
+
+    prompt = generate_reverse_prompt(file_name, content)
     
-    print(f"🚀 Generating blog for: {file_name}...")
-    
+    print(f"🚀 Generating reverse-engineered prompt for: {file_name} using model {model_name}...")
+
     response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "system", "content": "You are an expert in prompt engineering and AI-generated content."},
+        model=model_name,
+        messages=[{"role": "system", "content": "You are an expert in AI prompt engineering."},
                   {"role": "user", "content": prompt}],
         temperature=0.7
     )
     
-    generated_content = response["choices"][0]["message"]["content"]
+    generated_prompt = response["choices"][0]["message"]["content"]
 
-    # Ensure output directory exists
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    # Store prompt in the database with model name
+    store_generated_prompt(blog_id, generated_prompt, model_name)
 
-    output_path = os.path.join(OUTPUT_DIR, file_name)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(generated_content)
-
-    print(f"✅ Blog saved: {output_path}")
-
-def main():
-    """Fetch all blog IDs and process them one at a time."""
-    blog_ids = fetch_all_blog_ids()
-    
-    if not blog_ids:
-        print("❌ No blogs found in the database.")
-        return
-
-    for blog_id in blog_ids:
-        blog = fetch_blog_by_id(blog_id)  # Fetch a single blog at a time
-        if blog:
-            generate_prompt(blog)
-        else:
-            print(f"⚠️ Skipping blog ID {blog_id}, not found.")
-
-if __name__ == "__main__":
-    main()
+    print(f"✅ Prompt stored for blog ID {blog_id} (Model: {model_name})")
