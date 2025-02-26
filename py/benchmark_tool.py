@@ -4,13 +4,23 @@ import argparse
 import sys
 from pkg.file_ingestor.ingestor import FileIngestor
 from pkg.config.config import DB_CONFIG
-from pkg.prompt_generator.generator import fetch_all_blog_md5_hashes, fetch_blog_by_md5_hash, generate_blog_prompt, create_prompts_table
-
+from pkg.prompt_generator.generator import (
+    fetch_all_blog_md5_hashes,
+    fetch_blog_by_md5_hash,
+    generate_blog_prompt,
+    create_prompts_table,
+)
+from pkg.blog_generator.generator import (
+    create_generated_blogs_table,
+    fetch_all_prompt_ids,
+    fetch_prompt_by_id,
+    generate_blog_content,
+    store_generated_blog,
+)
 
 # Define a filter function (e.g., only `.md` files)
 def filter_markdown_files(filename):
     return filename.endswith(".md")
-
 
 def run_ingestor(directory, doc_type):
     """Runs the file ingestor with the specified directory and document type."""
@@ -52,14 +62,35 @@ def run_prompt_generator(limit=None, model=None):
             print(f"⚠️ Skipping blog md5 hash {blog_md5_hash}, not found.")
 
 
+def run_blog_generator(model=None):
+    """Runs the blog generator to generate blogs from prompts."""
+    create_generated_blogs_table()
+    prompt_ids = fetch_all_prompt_ids()
+
+    if not prompt_ids:
+        print("❌ No prompts found in the database.")
+        return
+
+    for prompt_id in prompt_ids:
+        print(f"🚀 Generating blog for prompt id: {prompt_id}")
+        prompt = fetch_prompt_by_id(prompt_id)  # Fetch a single prompt at a time
+        if prompt:
+            markdown_content, plain_text_content, md5_hash = generate_blog_content(
+                prompt, model
+            )
+            store_generated_blog(
+                prompt_id, markdown_content, plain_text_content, model, md5_hash
+            )
+        else:
+            print(f"⚠️ Skipping prompt id {prompt_id}, not found.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Benchmark Tool CLI")
 
     # Define available subcommands
     parser.add_argument(
-        "command",
-        choices=["ingest", "generate-prompt"],
-        help="Command to execute"
+        "command", choices=["ingest", "generate-prompt"], help="Command to execute"
     )
 
     # Arguments for 'ingest' command
@@ -81,25 +112,31 @@ def main():
         "--limit",
         type=int,
         required=False,
-        help="Limit the number of blog prompts generated (optional)"
+        help="Limit the number of blog prompts generated (optional)",
     )
 
     parser.add_argument(
         "--model",
         type=str,
         required=True,
-        help="Model to use for prompt generation (optional)"
-    ) 
+        help="Model to use for prompt generation (optional)",
+    )
     args = parser.parse_args()
 
     if args.command == "ingest":
         if not args.dir or not args.doc_type:
-            print("❌ Error: --dir and --doc-type are required for 'ingest'.", file=sys.stderr)
+            print(
+                "❌ Error: --dir and --doc-type are required for 'ingest'.",
+                file=sys.stderr,
+            )
             sys.exit(1)
         run_ingestor(args.dir, args.doc_type)
 
     elif args.command == "generate-prompt":
         run_prompt_generator(args.limit, args.model)
+
+    elif args.command == "generate-blog":
+        run_blog_generator(args.model)
 
 
 if __name__ == "__main__":
