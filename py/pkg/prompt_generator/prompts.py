@@ -1,4 +1,4 @@
-def generate_reverse_prompt(title, content):
+def generate_reverse_prompt(content):
     """Constructs a prompt asking the model to generate a blog-writing prompt based on an existing blog."""
     return f"""
     You are an expert in prompt engineering and AI-generated content. Your task is to read a human-written blog post 
@@ -9,9 +9,6 @@ def generate_reverse_prompt(title, content):
     - Determine the key themes, tone, style, and structure of the blog.
     - Construct a detailed and effective prompt that, when given to an AI model, would result in generating a similar blog.
     - The prompt should be structured in a way that guides an LLM (like GPT-4) to create high-quality, engaging, and informative content.
-
-    **Example Input:**
-    Title: "{title}"
 
     Blog Content:
     {content}

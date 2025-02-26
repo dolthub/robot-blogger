@@ -4,7 +4,7 @@ import argparse
 import sys
 from pkg.file_ingestor.ingestor import FileIngestor
 from pkg.config.config import DB_CONFIG
-from pkg.prompt_generator.generator import fetch_all_blog_ids, fetch_blog_by_id, generate_blog_prompt
+from pkg.prompt_generator.generator import fetch_all_blog_md5_hashes, fetch_blog_by_md5_hash, generate_blog_prompt, create_prompts_table
 
 
 # Define a filter function (e.g., only `.md` files)
@@ -33,21 +33,23 @@ def run_ingestor(directory, doc_type):
 
 def run_prompt_generator(limit=None, model=None):
     """Runs the prompt generator to reverse-engineer prompts from human-written blogs."""
-    blog_ids = fetch_all_blog_ids()
+    create_prompts_table()
+    blog_md5_hashes = fetch_all_blog_md5_hashes()
 
-    if not blog_ids:
+    if not blog_md5_hashes:
         print("❌ No blogs found in the database.")
         return
 
     if limit:
-        blog_ids = blog_ids[:limit]
+        blog_md5_hashes = blog_md5_hashes[:limit]
 
-    for blog_id in blog_ids:
-        blog = fetch_blog_by_id(blog_id)  # Fetch a single blog at a time
+    for blog_md5_hash in blog_md5_hashes:
+        print(f"🚀 Generating prompt for blog md5 hash: {blog_md5_hash}")
+        blog = fetch_blog_by_md5_hash(blog_md5_hash)  # Fetch a single blog at a time
         if blog:
             generate_blog_prompt(blog, model)
         else:
-            print(f"⚠️ Skipping blog ID {blog_id}, not found.")
+            print(f"⚠️ Skipping blog md5 hash {blog_md5_hash}, not found.")
 
 
 def main():
