@@ -77,8 +77,9 @@ def run_blog_generator(model=None):
         print(f"🚀 Generating blog for prompt id: {prompt_id}")
         prompt = fetch_prompt_by_id(prompt_id)  # Fetch a single prompt at a time
         if prompt:
+            generated_prompt = prompt.get("generated_prompt", "")
             markdown_content, plain_text_content, md5_hash = generate_blog_content(
-                prompt, model
+                generated_prompt, model
             )
             store_generated_blog(
                 prompt_id, markdown_content, plain_text_content, model, md5_hash

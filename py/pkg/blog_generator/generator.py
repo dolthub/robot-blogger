@@ -84,9 +84,12 @@ def generate_blog_content(prompt_text, model_name="gpt-4"):
     """Generates blog content in markdown format using OpenAI with streaming."""
     print(f"🚀 Generating blog using model {model_name}...")
 
-    # Ensure prompt_text is a string
+    if isinstance(prompt_text, dict):
+        print(f"⚠️ Warning: Unexpected dictionary format in prompt_text: {prompt_text}")
+        prompt_text = prompt_text.get("text", "")
+
     if not isinstance(prompt_text, str):
-        print(f"⚠️ Warning: prompt_text is not a string. Converting to string. Type: {type(prompt_text)}")
+        print(f"⚠️ Warning: Still not a string! Converting to string.")
         prompt_text = str(prompt_text)
 
     # Call OpenAI API with streaming enabled
@@ -100,21 +103,23 @@ def generate_blog_content(prompt_text, model_name="gpt-4"):
             {"role": "user", "content": prompt_text},
         ],
         temperature=0.7,
-        stream=True  # Enable streaming
+        stream=True,  # Enable streaming
     )
 
     # Initialize empty strings to store the response
     markdown_content = ""
-    
+
     print("📡 Streaming response from LLM...")
-    
+
     for chunk in response:
         if chunk.choices:
             delta = chunk.choices[0].delta
             if delta.content:
                 markdown_content += delta.content
-                print(delta.content, end="", flush=True)  # Stream to console in real-time
-    
+                print(
+                    delta.content, end="", flush=True
+                )  # Stream to console in real-time
+
     print("\n✅ Finished streaming response.")
 
     # Convert markdown to plaintext
@@ -124,7 +129,6 @@ def generate_blog_content(prompt_text, model_name="gpt-4"):
     md5_hash = generate_md5_hash(markdown_content)
 
     return markdown_content, plain_text_content, md5_hash
-
 
 
 def store_generated_blog(
