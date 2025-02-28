@@ -38,7 +38,7 @@ Here are the topic, length, user's prompt, and output format:
 
 # Length
 ` + "```" + `markdown
-%s
+%d
 ` + "```" + `
 
 # User Prompt

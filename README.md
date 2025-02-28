@@ -45,7 +45,7 @@ One of:
 
 **Required for Generate**
 
-- `-prompt`, the prompt to run.
+- `-prompt-file`, the path to a file containing the prompt to run.
 - `-topic`, the topic of the content to generate.
 - `-length`, the length of the content to generate.
 
@@ -94,5 +94,5 @@ export VECTOR_STORE_PASSWORD=mydbpass
 --topic="DoltHub Products" \
 --length=100 \
 --store-name=robot_blogger_llama3_v1 \
---prompt="What are Dolt and DoltHub?"
+--prompt-file=/path/to/file/containing/prompt
 ```
