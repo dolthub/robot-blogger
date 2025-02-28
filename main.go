@@ -159,6 +159,7 @@ func main() {
 	config.WithIncludeFileFunc(includeFileFunc)
 	config.WithPreContentSystemPrompt(SystemPromptPreContentBlock)
 	config.WithPostContentSystemPrompt(SystemPromptPostContentBlock)
+	config.WithRefineContextSystemPrompt(RefineContextSystemPrompt)
 
 	blogger, err := pkg.NewBlogger(
 		ctx,

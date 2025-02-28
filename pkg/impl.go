@@ -28,15 +28,16 @@ import (
 type DocSourceType string
 
 type bloggerImpl struct {
-	llm                     llms.Model
-	s                       HasableVectorStore
-	splitter                textsplitter.TextSplitter
-	includeFileFunc         func(path string) bool
-	runner                  Runner
-	model                   Model
-	logger                  *zap.Logger
-	preContentSystemPrompt  string
-	postContentSystemPrompt string
+	llm                       llms.Model
+	s                         HasableVectorStore
+	splitter                  textsplitter.TextSplitter
+	includeFileFunc           func(path string) bool
+	runner                    Runner
+	model                     Model
+	logger                    *zap.Logger
+	preContentSystemPrompt    string
+	postContentSystemPrompt   string
+	refineContextSystemPrompt string
 }
 
 var _ Blogger = &bloggerImpl{}
@@ -134,15 +135,16 @@ func NewBlogger(
 	}
 
 	return &bloggerImpl{
-		s:                       s,
-		llm:                     llm,
-		splitter:                config.Splitter,
-		includeFileFunc:         config.IncludeFileFunc,
-		runner:                  config.Runner,
-		model:                   config.Model,
-		logger:                  logger,
-		preContentSystemPrompt:  config.PreContentSystemPrompt,
-		postContentSystemPrompt: config.PostContentSystemPrompt,
+		s:                         s,
+		llm:                       llm,
+		splitter:                  config.Splitter,
+		includeFileFunc:           config.IncludeFileFunc,
+		runner:                    config.Runner,
+		model:                     config.Model,
+		logger:                    logger,
+		preContentSystemPrompt:    config.PreContentSystemPrompt,
+		postContentSystemPrompt:   config.PostContentSystemPrompt,
+		refineContextSystemPrompt: config.RefineContextSystemPrompt,
 	}, nil
 }
 
@@ -214,17 +216,35 @@ func (b *bloggerImpl) Store(ctx context.Context, docSourceType DocSourceType, di
 
 func (b *bloggerImpl) getNumSearchDocs(length int) int {
 	if length < 300 {
-		return 3
+		return 10
 	} else if length < 2500 {
-		return 4
+		return 26
 	} else if length < 5000 {
-		return 5
+		return 48
 	} else if length < 7500 {
-		return 6
+		return 78
 	} else if length < 10000 {
 		return 7
 	}
-	return 9
+	return 100
+}
+
+func (b *bloggerImpl) refineContext(ctx context.Context, userPrompt, initialContext string) (string, error) {
+	systemPrompt := fmt.Sprintf(b.refineContextSystemPrompt, userPrompt, initialContext)
+	msg := llms.MessageContent{
+		Role:  llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{llms.TextContent{Text: systemPrompt}},
+	}
+	var sb strings.Builder
+	_, err := b.llm.GenerateContent(ctx,
+		[]llms.MessageContent{msg},
+		llms.WithTemperature(0.3),
+		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
+			sb.WriteString(string(chunk))
+			return nil
+		}),
+	)
+	return sb.String(), err
 }
 
 func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic string, length int, outputFormat string) error {
@@ -237,14 +257,33 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 	if len(docs) == 0 {
 		return errors.New("no relevant documents found")
 	}
-	var sb strings.Builder
-	sb.WriteString(b.preContentSystemPrompt)
+
+	var contextOnly strings.Builder
 	for _, doc := range docs {
 		fmt.Println()
 		fmt.Println("DOC SIM SCORE: ", doc.Score)
 		fmt.Println()
-		sb.WriteString(fmt.Sprintf("\n<context>\n%s\n</context>\n", doc.PageContent))
+		contextOnly.WriteString(fmt.Sprintf("\n\n%s\n\n", doc.PageContent))
 	}
+
+	initialContext := contextOnly.String()
+
+	fmt.Println()
+	fmt.Println("INITIAL CONTEXT: ", initialContext)
+	fmt.Println()
+
+	refinedContext, err := b.refineContext(ctx, userPrompt, initialContext)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("REFINED CONTEXT: ", refinedContext)
+	fmt.Println()
+
+	var sb strings.Builder
+	sb.WriteString(b.preContentSystemPrompt)
+	sb.WriteString(refinedContext)
 	sb.WriteString(fmt.Sprintf(b.postContentSystemPrompt, topic, length, userPrompt, outputFormat))
 	systemPrompt := sb.String()
 
@@ -260,7 +299,7 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 
 	_, err = b.llm.GenerateContent(ctx,
 		[]llms.MessageContent{msg},
-		llms.WithTemperature(0.8),
+		llms.WithTemperature(0.3),
 		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
 			fmt.Print(string(chunk))
 			return nil
