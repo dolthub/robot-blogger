@@ -29,7 +29,7 @@ var _ HasableVectorStore = &PostgresHasableVectorStore{}
 func (d *PostgresHasableVectorStore) Has(ctx context.Context, metadata map[string]any) (bool, error) {
 	whereQuerys := make([]string, 0)
 	for k, v := range metadata {
-		whereQuerys = append(whereQuerys, fmt.Sprintf("(langchain_pg_embedding ->> '%s') = '%s'", k, v))
+		whereQuerys = append(whereQuerys, fmt.Sprintf("(langchain_pg_embedding.cmetadata ->> '%s') = '%s'", k, v))
 	}
 	whereQuery := strings.Join(whereQuerys, " AND ")
 	if len(whereQuery) == 0 {
