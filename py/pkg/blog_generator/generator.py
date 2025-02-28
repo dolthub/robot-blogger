@@ -43,7 +43,15 @@ def fetch_all_prompt_ids():
     connection = mysql.connector.connect(**DB_CONFIG)
     cursor = connection.cursor()
 
-    cursor.execute("SELECT id FROM prompts")
+    cursor.execute(
+        """
+    SELECT p.id 
+    FROM prompts p
+    LEFT JOIN generated_blogs gb ON p.id = gb.prompt_id
+    WHERE gb.prompt_id IS NULL
+"""
+    )
+
     prompt_ids = [row[0] for row in cursor.fetchall()]  # Store only IDs
 
     cursor.close()
