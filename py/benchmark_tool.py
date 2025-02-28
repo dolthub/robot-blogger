@@ -17,6 +17,7 @@ from pkg.blog_generator.generator import (
     generate_blog_content,
     store_generated_blog,
 )
+from pkg.benchmark.benchmark import benchmark
 
 
 # Define a filter function (e.g., only `.md` files)
@@ -94,7 +95,7 @@ def main():
     # Define available subcommands
     parser.add_argument(
         "command",
-        choices=["ingest", "generate-prompt", "generate-blog"],
+        choices=["ingest", "generate-prompt", "generate-blog", "benchmark"],
         help="Command to execute",
     )
 
@@ -123,9 +124,24 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        required=True,
+        required=False,
         help="Model to use for prompt generation (optional)",
     )
+
+    parser.add_argument(
+        "--human-blogs",
+        type=str,
+        required=False,
+        help="Path to the human blogs CSV file.",
+    )
+
+    parser.add_argument(
+        "--generated-blogs",
+        type=str,
+        required=False,
+        help="Path to the generated blogs CSV file.",
+    )
+
     args = parser.parse_args()
 
     if args.command == "ingest":
@@ -138,10 +154,29 @@ def main():
         run_ingestor(args.dir, args.doc_type)
 
     elif args.command == "generate-prompt":
+        if not args.model:
+            print(
+                "❌ Error: --model is required for 'generate-prompt'.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         run_prompt_generator(args.limit, args.model)
-
     elif args.command == "generate-blog":
+        if not args.model:
+            print(
+                "❌ Error: --model is required for 'generate-blog'.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         run_blog_generator(args.model)
+    elif args.command == "benchmark":
+        if not args.human_blogs or not args.generated_blogs:
+            print(
+                "❌ Error: --human-blogs and --generated-blogs are required for 'benchmark'.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        benchmark(args.human_blogs, args.generated_blogs)
 
 
 if __name__ == "__main__":
