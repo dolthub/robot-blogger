@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,7 +22,7 @@ var postgres = flag.Bool("postgres", false, "uses postgres as vector store")
 var dolt = flag.Bool("dolt", false, "uses dolt as vector store")
 var model = flag.String("model", "", "the LLM model to use")
 var mariadb = flag.Bool("mariadb", false, "uses mariadb as vector store")
-var prompt = flag.String("prompt", "", "the prompt to run")
+var promptFile = flag.String("promptFile", "", "the file containing the prompt to run")
 var docType = flag.String("doc-type", "", "the type of document you are storing")
 var storeName = flag.String("store-name", "", "the name of the vector store to use")
 var host = flag.String("host", "", "the vector store host to connect to")
@@ -158,8 +159,8 @@ func main() {
 	config.WithSplitter(splitter)
 	config.WithIncludeFileFunc(includeFileFunc)
 	config.WithPreContentSystemPrompt(SystemPromptPreContentBlock)
-	config.WithPostContentSystemPrompt(SystemPromptPostContentBlock)
-	config.WithRefineContextSystemPrompt(RefineContextSystemPrompt)
+	config.WithPostContentSystemPromptTemplate(SystemPromptPostContentBlockTemplate)
+	config.WithRefineContextSystemPrompt(RefineContextSystemPromptPrefix)
 
 	blogger, err := pkg.NewBlogger(
 		ctx,
@@ -174,7 +175,18 @@ func main() {
 	if storeOnly {
 		err = blogger.Store(ctx, sourceType, docsInputsDir)
 	} else {
-		err = blogger.Generate(ctx, *prompt, *topic, *length, *outputFormat)
+		if *promptFile == "" {
+			printErrorUsageAndExit(errors.New("prompt file is required"))
+		}
+		f, err := os.Open(*promptFile)
+		if err != nil {
+			printErrorAndExit(err)
+		}
+		data, err := io.ReadAll(f)
+		if err != nil {
+			printErrorAndExit(err)
+		}
+		err = blogger.Generate(ctx, string(data), *topic, *length, *outputFormat)
 	}
 	if err != nil {
 		printErrorAndExit(err)

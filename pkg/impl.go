@@ -28,16 +28,16 @@ import (
 type DocSourceType string
 
 type bloggerImpl struct {
-	llm                       llms.Model
-	s                         HasableVectorStore
-	splitter                  textsplitter.TextSplitter
-	includeFileFunc           func(path string) bool
-	runner                    Runner
-	model                     Model
-	logger                    *zap.Logger
-	preContentSystemPrompt    string
-	postContentSystemPrompt   string
-	refineContextSystemPrompt string
+	llm                             llms.Model
+	s                               HasableVectorStore
+	splitter                        textsplitter.TextSplitter
+	includeFileFunc                 func(path string) bool
+	runner                          Runner
+	model                           Model
+	logger                          *zap.Logger
+	preContentSystemPrompt          string
+	postContentSystemPromptTemplate string
+	refineContextSystemPrompt       string
 }
 
 var _ Blogger = &bloggerImpl{}
@@ -135,16 +135,16 @@ func NewBlogger(
 	}
 
 	return &bloggerImpl{
-		s:                         s,
-		llm:                       llm,
-		splitter:                  config.Splitter,
-		includeFileFunc:           config.IncludeFileFunc,
-		runner:                    config.Runner,
-		model:                     config.Model,
-		logger:                    logger,
-		preContentSystemPrompt:    config.PreContentSystemPrompt,
-		postContentSystemPrompt:   config.PostContentSystemPrompt,
-		refineContextSystemPrompt: config.RefineContextSystemPrompt,
+		s:                               s,
+		llm:                             llm,
+		splitter:                        config.Splitter,
+		includeFileFunc:                 config.IncludeFileFunc,
+		runner:                          config.Runner,
+		model:                           config.Model,
+		logger:                          logger,
+		preContentSystemPrompt:          config.PreContentSystemPrompt,
+		postContentSystemPromptTemplate: config.PostContentSystemPromptTemplate,
+		refineContextSystemPrompt:       config.RefineContextSystemPrompt,
 	}, nil
 }
 
@@ -230,7 +230,20 @@ func (b *bloggerImpl) getNumSearchDocs(length int) int {
 }
 
 func (b *bloggerImpl) refineContext(ctx context.Context, userPrompt, initialContext string) (string, error) {
-	systemPrompt := fmt.Sprintf(b.refineContextSystemPrompt, userPrompt, initialContext)
+	promptSuffix := fmt.Sprintf(`Here is the user's prompt and retrieved context documents:
+
+# User Prompt
+
+`+"```"+`markdown
+%s
+`+"```"+`
+
+# Retrieved Context Documents
+
+%s
+`, userPrompt, initialContext)
+
+	systemPrompt := b.refineContextSystemPrompt + "\n" + promptSuffix
 	msg := llms.MessageContent{
 		Role:  llms.ChatMessageTypeHuman,
 		Parts: []llms.ContentPart{llms.TextContent{Text: systemPrompt}},
@@ -263,7 +276,7 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 		fmt.Println()
 		fmt.Println("DOC SIM SCORE: ", doc.Score)
 		fmt.Println()
-		contextOnly.WriteString(fmt.Sprintf("\n\n%s\n\n", doc.PageContent))
+		contextOnly.WriteString(fmt.Sprintf("\n```markdown\n%s\n```\n", doc.PageContent))
 	}
 
 	initialContext := contextOnly.String()
@@ -283,8 +296,10 @@ func (b *bloggerImpl) Generate(ctx context.Context, userPrompt string, topic str
 
 	var sb strings.Builder
 	sb.WriteString(b.preContentSystemPrompt)
+	sb.WriteString("\n")
 	sb.WriteString(refinedContext)
-	sb.WriteString(fmt.Sprintf(b.postContentSystemPrompt, topic, length, userPrompt, outputFormat))
+	sb.WriteString("\n")
+	sb.WriteString(fmt.Sprintf(b.postContentSystemPromptTemplate, topic, length, userPrompt, outputFormat))
 	systemPrompt := sb.String()
 
 	fmt.Println()

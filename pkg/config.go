@@ -3,20 +3,20 @@ package pkg
 import "github.com/tmc/langchaingo/textsplitter"
 
 type Config struct {
-	Runner                    Runner
-	Model                     Model
-	StoreType                 StoreType
-	Host                      string
-	User                      string
-	Password                  string
-	Port                      int
-	VectorDimensions          int
-	StoreName                 string
-	Splitter                  textsplitter.TextSplitter
-	IncludeFileFunc           func(path string) bool
-	PreContentSystemPrompt    string
-	PostContentSystemPrompt   string
-	RefineContextSystemPrompt string
+	Runner                          Runner
+	Model                           Model
+	StoreType                       StoreType
+	Host                            string
+	User                            string
+	Password                        string
+	Port                            int
+	VectorDimensions                int
+	StoreName                       string
+	Splitter                        textsplitter.TextSplitter
+	IncludeFileFunc                 func(path string) bool
+	PreContentSystemPrompt          string
+	PostContentSystemPromptTemplate string
+	RefineContextSystemPrompt       string
 }
 
 func NewConfig() *Config {
@@ -83,8 +83,8 @@ func (c *Config) WithPreContentSystemPrompt(preContentSystemPrompt string) *Conf
 	return c
 }
 
-func (c *Config) WithPostContentSystemPrompt(postContentSystemPrompt string) *Config {
-	c.PostContentSystemPrompt = postContentSystemPrompt
+func (c *Config) WithPostContentSystemPromptTemplate(postContentSystemPromptTemplate string) *Config {
+	c.PostContentSystemPromptTemplate = postContentSystemPromptTemplate
 	return c
 }
 

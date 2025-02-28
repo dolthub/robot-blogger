@@ -22,33 +22,38 @@ Each input will be structured using specific tags to indicate different sections
 [General subject of the content]
 
 # Length
-[Desired length in words, e.g., 1000]
+[Minimum length in words, e.g., 1000]
 
 # Output Format
 [Requested format, e.g., blog post, social media post, white paper, etc.]
-
-%s
-
 `
 
-var SystemPromptPostContentBlock = `
+var SystemPromptPostContentBlockTemplate = `
 Here are the topic, length, user's prompt, and output format:
 
 # Topic
+` + "```" + `markdown
 %s
+` + "```" + `
 
 # Length
-%d
+` + "```" + `markdown
+%s
+` + "```" + `
 
 # User Prompt
+` + "```" + `markdown
 %s
+` + "```" + `
 
 # Output Format
+` + "```" + `markdown
 %s
+` + "```" + `
 
 `
 
-var RefineContextSystemPrompt = `# System Prompt  
+var RefineContextSystemPromptPrefix = `# System Prompt  
 
 You are an **expert RAG agent** specializing in the **selection and reranking of retrieved context documents** to optimize content generation for another model.  
 
@@ -77,14 +82,4 @@ Your response should strictly follow this format:
 # Context
 
 [Reranked, most relevant context documents here]
-
-Here is the user's prompt and retrieved context documents:
-
-# User Prompt
-
-%s
-
-# Retrieved Context Documents
-
-%s
 `
